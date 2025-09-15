@@ -5383,9 +5383,367 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         }
     }
 
-    generateBladeCountChart() {
+    async generateBladeCountChart() {
         const outputDiv = document.getElementById("bladeCountOutput");
-        outputDiv.innerHTML = "<p>Blade count chart functionality has been implemented! Load your CSV files to test.</p>";
+
+        // Make sure output div is visible
+        outputDiv.classList.add('active');
+
+        try {
+            // Show loading state
+            outputDiv.innerHTML = "<p>Loading and processing data...</p>";
+
+            // Load and process data
+            const rawData = await this.loadBladeCountData();
+            const cleanedData = this.cleanBladeCountData(rawData);
+            const aggregatedData = this.aggregateBladeCountData(cleanedData);
+
+            // Render chart
+            this.renderBladeCountChart(aggregatedData, outputDiv);
+
+        } catch (error) {
+            console.error('Error generating blade count chart:', error);
+            outputDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        }
+    }
+
+    async loadBladeCountData() {
+        // First, check csvManager's loaded files
+        let individFile = null;
+
+        if (csvManager && csvManager.workingDirFiles) {
+            individFile = csvManager.workingDirFiles.find(file =>
+                file.name.includes('Crop_ALGA_2503_Indiv.csv') ||
+                file.name.includes('Indiv.csv')
+            );
+        }
+
+        if (!individFile) {
+            // Show helpful error message about loading files
+            throw new Error('Please load the Crop_ALGA_2503_Indiv.csv file using the "Select CSV Files" button first.');
+        }
+
+        return this.parseCSVFile(individFile);
+    }
+
+    async parseCSVFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const text = e.target.result;
+
+                    // Handle different line endings
+                    const lines = text.split(/\r\n|\n|\r/);
+
+                    // Parse header row
+                    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+                    const data = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim()) {
+                            // Handle quoted CSV values
+                            const values = this.parseCSVLine(lines[i]);
+                            const row = {};
+                            headers.forEach((header, index) => {
+                                row[header] = values[index] ? values[index].trim() : '';
+                            });
+                            data.push(row);
+                        }
+                    }
+
+                    console.log(`Parsed ${data.length} rows from ${file.name}`);
+                    resolve(data);
+                } catch (error) {
+                    reject(new Error(`Failed to parse CSV: ${error.message}`));
+                }
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+        });
+    }
+
+    // Helper method for proper CSV line parsing
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+
+        result.push(current);
+        return result;
+    }
+
+    cleanBladeCountData(data) {
+        console.log(`Starting with ${data.length} total rows`);
+
+        const cleaned = data.filter(row => {
+            // Drop summary rows (where subset is empty/NaN/null)
+            if (!row.subset ||
+                row.subset.trim() === '' ||
+                row.subset.toLowerCase() === 'nan' ||
+                row.subset.toLowerCase() === 'null') {
+                return false;
+            }
+
+            // Keep only small/large subset values
+            const subset = row.subset.toString().toLowerCase().trim();
+            const isValidSubset = subset === 'small' || subset === 'large';
+
+            // Also check that we have a valid sample ID
+            const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const hasValidSampleId = sampleId && sampleId.trim() !== '';
+
+            return isValidSubset && hasValidSampleId;
+        });
+
+        console.log(`After cleaning: ${cleaned.length} blade records`);
+        console.log(`Subset distribution:`, {
+            small: cleaned.filter(r => r.subset.toLowerCase().trim() === 'small').length,
+            large: cleaned.filter(r => r.subset.toLowerCase().trim() === 'large').length
+        });
+
+        return cleaned;
+    }
+
+    aggregateBladeCountData(data) {
+        const grouped = {};
+        const stationSet = new Set();
+
+        // Group and count
+        data.forEach(row => {
+            const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const subset = row.subset.toString().toLowerCase().trim();
+
+            if (!sampleId) return;
+
+            stationSet.add(sampleId);
+            const key = `${sampleId}_${subset}`;
+            grouped[key] = (grouped[key] || 0) + 1;
+        });
+
+        // Convert to structured format
+        const stations = Array.from(stationSet).sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+        );
+
+        const result = stations.map(station => {
+            const smallCount = grouped[`${station}_small`] || 0;
+            const largeCount = grouped[`${station}_large`] || 0;
+
+            return {
+                station: station,
+                smallBlades: smallCount,
+                largeBlades: largeCount,
+                total: smallCount + largeCount
+            };
+        });
+
+        console.log('Aggregated data:', result);
+        return result;
+    }
+
+    renderBladeCountChart(data, outputDiv) {
+
+        // Create canvas for chart
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 500;
+        canvas.style.border = '1px solid #ddd';
+        canvas.style.borderRadius = '4px';
+        canvas.style.backgroundColor = '#ffffff';
+        canvas.style.display = 'block';
+        canvas.style.margin = '10px auto';
+
+        // Create chart container
+        outputDiv.innerHTML = '';
+        const chartContainer = document.createElement('div');
+        chartContainer.style.textAlign = 'center';
+        chartContainer.style.marginTop = '20px';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Blade Count by Station (Small vs Large)';
+        title.style.marginBottom = '10px';
+
+        chartContainer.appendChild(title);
+        chartContainer.appendChild(canvas);
+        outputDiv.appendChild(chartContainer);
+
+
+        // Draw the chart
+        this.drawStackedBarChart(canvas, data);
+
+        // Add summary table
+        this.addBladeCountSummaryTable(data, outputDiv);
+    }
+
+    drawStackedBarChart(canvas, data) {
+        const ctx = canvas.getContext('2d');
+        const padding = 60;
+        const chartWidth = canvas.width - 2 * padding;
+        const chartHeight = canvas.height - 2 * padding;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (data.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        // Calculate max value for scaling
+        const maxValue = Math.max(...data.map(d => d.total));
+        const yScale = chartHeight / maxValue;
+        const barWidth = chartWidth / data.length * 0.8;
+        const barSpacing = chartWidth / data.length * 0.2;
+
+        // Colors
+        const smallColor = '#4CAF50';
+        const largeColor = '#2196F3';
+
+        // Draw bars
+        data.forEach((station, index) => {
+            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+            const smallHeight = station.smallBlades * yScale;
+            const largeHeight = station.largeBlades * yScale;
+
+            // Draw small blades (bottom)
+            ctx.fillStyle = smallColor;
+            ctx.fillRect(x, canvas.height - padding - smallHeight, barWidth, smallHeight);
+
+            // Draw large blades (top)
+            ctx.fillStyle = largeColor;
+            ctx.fillRect(x, canvas.height - padding - smallHeight - largeHeight, barWidth, largeHeight);
+
+            // Station label
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.save();
+            ctx.translate(x + barWidth / 2, canvas.height - padding + 15);
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillText(station.station, 0, 0);
+            ctx.restore();
+        });
+
+        // Draw axes
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, canvas.height - padding);
+        ctx.lineTo(canvas.width - padding, canvas.height - padding);
+        ctx.stroke();
+
+        // Y-axis labels
+        ctx.fillStyle = '#333';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        for (let i = 0; i <= 5; i++) {
+            const value = (maxValue / 5) * i;
+            const y = canvas.height - padding - (chartHeight / 5) * i;
+            ctx.fillText(Math.round(value), padding - 10, y + 4);
+
+            // Grid lines
+            if (i > 0) {
+                ctx.strokeStyle = '#eee';
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - padding, y);
+                ctx.stroke();
+            }
+        }
+
+        // Legend
+        const legendY = 30;
+        ctx.fillStyle = smallColor;
+        ctx.fillRect(canvas.width - 150, legendY, 15, 15);
+        ctx.fillStyle = '#333';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('Small blades', canvas.width - 130, legendY + 12);
+
+        ctx.fillStyle = largeColor;
+        ctx.fillRect(canvas.width - 150, legendY + 25, 15, 15);
+        ctx.fillStyle = '#333';
+        ctx.fillText('Large blades', canvas.width - 130, legendY + 37);
+
+        // Axis labels
+        ctx.fillStyle = '#333';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Station', canvas.width / 2, canvas.height - 10);
+
+        ctx.save();
+        ctx.translate(15, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Blade Count', 0, 0);
+        ctx.restore();
+    }
+
+    addBladeCountSummaryTable(data, outputDiv) {
+        const tableContainer = document.createElement('div');
+        tableContainer.style.marginTop = '20px';
+
+        const tableTitle = document.createElement('h4');
+        tableTitle.textContent = 'Summary Data';
+        tableContainer.appendChild(tableTitle);
+
+        const table = document.createElement('table');
+        table.style.border = '1px solid #ddd';
+        table.style.borderCollapse = 'collapse';
+        table.style.margin = '0 auto';
+        table.style.minWidth = '400px';
+
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Station', 'Small Blades', 'Large Blades', 'Total'].forEach(text => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            th.style.border = '1px solid #ddd';
+            th.style.padding = '8px';
+            th.style.backgroundColor = '#f5f5f5';
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        data.forEach(station => {
+            const row = document.createElement('tr');
+            [station.station, station.smallBlades, station.largeBlades, station.total].forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = value;
+                td.style.border = '1px solid #ddd';
+                td.style.padding = '8px';
+                td.style.textAlign = 'center';
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        tableContainer.appendChild(table);
+        outputDiv.appendChild(tableContainer);
     }
 }
 
