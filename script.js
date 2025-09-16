@@ -6241,20 +6241,22 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
     // Length distribution methods
     async loadLengthData(filename) {
-        // First, check csvManager's loaded files
-        let lengthFile = null;
+        console.log('=== LOADING LENGTH DATA ===');
+        console.log('Requested filename:', filename);
 
+        // Find the selected file in loaded files (exact match only, like blade count)
+        let selectedFile = null;
         if (csvManager && csvManager.workingDirFiles) {
-            lengthFile = csvManager.workingDirFiles.find(file =>
-                file.name === filename || file.name.includes('Indiv.csv')
-            );
+            console.log('Available files:', csvManager.workingDirFiles.map(f => f.name));
+            selectedFile = csvManager.workingDirFiles.find(file => file.name === filename);
         }
 
-        if (!lengthFile) {
-            throw new Error(`Please load the ${filename} file using the "Select CSV Files" button first.`);
+        if (!selectedFile) {
+            throw new Error(`File "${filename}" not found. Please load it using the "Select CSV Files" button first.`);
         }
 
-        return this.parseCSVFile(lengthFile);
+        console.log('Loading file:', selectedFile.name);
+        return this.parseCSVFile(selectedFile);
     }
 
     aggregateLengthData(rawData, selectedVariable) {
