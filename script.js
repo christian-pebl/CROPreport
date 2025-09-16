@@ -6010,8 +6010,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Create canvas for chart
         const canvas = document.createElement('canvas');
-        canvas.width = 480;
-        canvas.height = 300;
+        canvas.width = 576;
+        canvas.height = 360;
         canvas.style.border = '1px solid #ddd';
         canvas.style.borderRadius = '4px';
         canvas.style.backgroundColor = '#ffffff';
@@ -6751,8 +6751,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             // Create canvas with error handling
             const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 500;
+            canvas.width = 576;
+            canvas.height = 360;
             canvas.style.display = 'block';
             canvas.style.margin = '0 auto';
             chartContainer.appendChild(canvas);
@@ -6874,12 +6874,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const boxWidth = chartWidth / data.length * 0.7;  // Box width
         const boxSpacing = chartWidth / data.length * 0.3;
 
-        // Color scheme for box plots
-        const boxColor = '#e3f2fd';      // Light blue fill
-        const boxStroke = '#1976d2';     // Blue border
-        const medianColor = '#d32f2f';   // Red median line
-        const whiskerColor = '#424242';  // Gray whiskers
-        const outlierColor = '#ff5722';  // Orange outliers
+        // Color scheme for box plots - Updated to match reference image
+        const boxColor = '#f8f9fa';      // Very light gray fill
+        const boxStroke = '#2c3e50';     // Dark blue-gray border
+        const medianColor = '#e74c3c';   // Bright red median line
+        const whiskerColor = '#34495e';  // Dark gray whiskers
+        const outlierColor = '#e67e22';  // Orange outliers
 
         // Draw gridlines first
         ctx.strokeStyle = '#e0e0e0';
@@ -6973,12 +6973,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                     console.log(`🔴 Drew ${stats.outliers.length} outliers`);
                 }
 
-                // Add statistics label
-                ctx.fillStyle = '#1f2937';
-                ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-                ctx.textAlign = 'center';
-                const labelText = `Med: ${stats.median.toFixed(1)}`;
-                ctx.fillText(labelText, centerX, whiskerMaxY - 8);
+                // Add statistics label - COMMENTED OUT
+                // ctx.fillStyle = '#1f2937';
+                // ctx.font = '9px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+                // ctx.textAlign = 'center';
+                // const labelText = `Med: ${stats.median.toFixed(1)}`;
+                // ctx.fillText(labelText, centerX, whiskerMaxY - 8);
 
             } else {
                 // Draw regular bar (fallback when no box plot data)
@@ -6990,7 +6990,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
                 // Value label
                 ctx.fillStyle = '#1f2937';
-                ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.font = '10px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(station.avgLength.toFixed(1), centerX, canvas.height - padding - barHeight - 5);
             }
@@ -7000,7 +7000,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             ctx.translate(centerX, canvas.height - padding + 15);
             ctx.rotate(-Math.PI / 4);
             ctx.fillStyle = '#374151';
-            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
             ctx.textAlign = 'right';
             ctx.fillText(station.station, 0, 0);
             ctx.restore();
@@ -7022,9 +7022,21 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.lineTo(padding + chartWidth, canvas.height - padding);
         ctx.stroke();
 
+        // Right vertical framing line (at max x)
+        ctx.beginPath();
+        ctx.moveTo(padding + chartWidth, padding);
+        ctx.lineTo(padding + chartWidth, canvas.height - padding);
+        ctx.stroke();
+
+        // Top horizontal framing line (at max y)
+        ctx.beginPath();
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding + chartWidth, padding);
+        ctx.stroke();
+
         // Y-axis labels
         ctx.fillStyle = '#6b7280';
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'right';
 
         for (let i = 0; i <= 5; i++) {
@@ -7038,27 +7050,42 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.translate(25, canvas.height / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.fillStyle = '#374151';
-        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'center';
         const yAxisTitle = hasBoxPlots ? 'Length (cm) Distribution' : 'Average Length (cm)';
         ctx.fillText(yAxisTitle, 0, 0);
         ctx.restore();
 
-        // Add legend for box plots
-        if (hasBoxPlots) {
-            this.drawBoxPlotLegend(ctx, canvas, padding);
-        }
+        // X-axis title
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 50);
+
+        // Add legend for box plots - REMOVED
+        // if (hasBoxPlots) {
+        //     this.drawBoxPlotLegend(ctx, canvas, padding, this.fileName);
+        // }
 
         console.log('✅ Box plot chart drawing complete');
     }
 
-    drawBoxPlotLegend(ctx, canvas, padding) {
+    drawBoxPlotLegend(ctx, canvas, padding, fileName) {
         console.log('🏷️ Drawing box plot legend');
+
+        // File name truncation function (2nd to 4th underscore)
+        const truncateFileName = (fileName) => {
+            const parts = fileName.split('_');
+            if (parts.length >= 4) {
+                return parts.slice(2, 4).join('_');
+            }
+            return fileName; // Return original if not enough underscores
+        };
 
         const legendX = canvas.width - padding - 160;
         const legendY = padding + 20;
         const legendWidth = 150;
-        const legendHeight = 100;
+        const legendHeight = 130; // Increased height to accommodate file name section
 
         // Legend background
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
@@ -7067,15 +7094,28 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
         ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
 
-        // Legend title
+        // File name section (at top)
+        if (fileName) {
+            ctx.fillStyle = '#374151';
+            ctx.font = 'bold 10px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('File:', legendX + 8, legendY + 15);
+
+            ctx.fillStyle = '#1976d2';
+            ctx.font = '9px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+            const truncatedName = truncateFileName(fileName);
+            ctx.fillText(truncatedName, legendX + 8, legendY + 28);
+        }
+
+        // Legend title for box plot components
         ctx.fillStyle = '#374151';
-        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.font = 'bold 11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('Box Plot Components:', legendX + 8, legendY + 15);
+        ctx.fillText('Box Plot Components:', legendX + 8, legendY + 45);
 
         // Mini box plot example
         const exampleX = legendX + 15;
-        const exampleY = legendY + 30;
+        const exampleY = legendY + 60;
         const exampleWidth = 20;
         const exampleHeight = 30;
 
@@ -7110,14 +7150,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Legend labels
         ctx.fillStyle = '#555';
-        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.font = '9px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'left';
 
         const labels = [
-            { text: '• Box: Q1 to Q3 (IQR)', y: legendY + 35 },
-            { text: '• Red line: Median', y: legendY + 46 },
-            { text: '• Whiskers: Data range', y: legendY + 57 },
-            { text: '• Orange dots: Outliers', y: legendY + 68 }
+            { text: '• Box: Q1 to Q3 (IQR)', y: legendY + 65 },
+            { text: '• Red line: Median', y: legendY + 76 },
+            { text: '• Whiskers: Data range', y: legendY + 87 },
+            { text: '• Orange dots: Outliers', y: legendY + 98 }
         ];
 
         labels.forEach(label => {
@@ -7126,8 +7166,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Add sample size note
         ctx.fillStyle = '#6b7280';
-        ctx.font = '8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText('Based on individual blade measurements', legendX + 8, legendY + 90);
+        ctx.font = '8px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+        ctx.fillText('Based on individual blade measurements', legendX + 8, legendY + 120);
     }
 
     drawWhiskerPlotLegend(ctx, canvas, padding) {
