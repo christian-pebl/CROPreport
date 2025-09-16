@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SD Detection Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success { color: #22c55e; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+        pre { background: #f8f8f8; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 SD Detection Function Test</h1>
+
+    <div class="test-container">
+        <h2>Test Data:</h2>
+        <pre id="testData">Loading...</pre>
+    </div>
+
+    <div class="test-container">
+        <h2>SD Detection Results:</h2>
+        <div id="detectionResults">Running tests...</div>
+    </div>
+
+    <div class="test-container">
+        <h2>Console Output:</h2>
+        <pre id="consoleOutput"></pre>
+    </div>
+
+    <script>
+        // Capture console.log output
+        const originalLog = console.log;
+        let consoleOutput = '';
+        console.log = function(...args) {
+            const message = args.join(' ');
+            consoleOutput += message + '\n';
+            document.getElementById('consoleOutput').textContent = consoleOutput;
+            originalLog.apply(console, args);
+        };
+
+        // Simple SD detection function for testing
+        function detectStandardDeviationColumn(averageColumn) {
+            console.log('🔍 Detecting SD column for:', averageColumn);
+            const sdColumn = averageColumn.replace(/^AV\s/, 'SD ');
+            console.log('🎯 Detected SD column:', sdColumn);
+            return sdColumn;
+        }
+
+        function validateSDColumn(rawData, sdColumn) {
+            if (!rawData || rawData.length === 0) {
+                console.log('❌ No data to validate SD column');
+                return false;
+            }
+
+            const firstRow = rawData[0];
+            const hasColumn = firstRow.hasOwnProperty(sdColumn);
+
+            console.log(`🔍 Validating SD column "${sdColumn}": ${hasColumn ? '✅ Found' : '❌ Not found'}`);
+
+            if (hasColumn) {
+                const validSDValues = rawData.filter(row => {
+                    const sdValue = parseFloat(row[sdColumn]);
+                    return !isNaN(sdValue) && sdValue >= 0;
+                }).length;
+
+                console.log(`📊 Valid SD values found: ${validSDValues}/${rawData.length}`);
+                return validSDValues > 0;
+            }
+
+            return false;
+        }
+
+        // Sample data based on the CSV file structure
+        const testData = [
+            {
+                'Date': '25/03/25',
+                'sample ID': '1-NE-3',
+                'AV sml_l (cm)': '15.8',
+                'AV lrg_l (cm)': '45.7',
+                'AV all_l (cm)': '34.5',
+                'SD sml_l (cm)': '1.1',
+                'SD lrg_l (cm)': '3.0',
+                'SD all_l (cm)': '3.1'
+            },
+            {
+                'Date': '25/03/25',
+                'sample ID': '4-SW-1',
+                'AV sml_l (cm)': '8.3',
+                'AV lrg_l (cm)': '58.0',
+                'AV all_l (cm)': '37.4',
+                'SD sml_l (cm)': '2.3',
+                'SD lrg_l (cm)': '15.5',
+                'SD all_l (cm)': '27.6'
+            }
+        ];
+
+        // Display test data
+        document.getElementById('testData').textContent = JSON.stringify(testData, null, 2);
+
+        // Run tests
+        function runTests() {
+            const results = [];
+            const testCases = [
+                'AV sml_l (cm)',
+                'AV lrg_l (cm)',
+                'AV all_l (cm)',
+                'Invalid Column'
+            ];
+
+            testCases.forEach(testCase => {
+                console.log(`\n=== Testing: ${testCase} ===`);
+
+                const detectedSD = detectStandardDeviationColumn(testCase);
+                const isValid = validateSDColumn(testData, detectedSD);
+
+                results.push({
+                    input: testCase,
+                    detected: detectedSD,
+                    valid: isValid,
+                    status: isValid ? '✅ PASS' : '❌ FAIL'
+                });
+            });
+
+            // Display results
+            let html = '<table border="1" style="border-collapse: collapse; width: 100%;">';
+            html += '<tr><th>Input Column</th><th>Detected SD Column</th><th>Valid</th><th>Status</th></tr>';
+
+            results.forEach(result => {
+                const statusClass = result.valid ? 'success' : 'error';
+                html += `<tr>
+                    <td>${result.input}</td>
+                    <td>${result.detected}</td>
+                    <td>${result.valid}</td>
+                    <td class="${statusClass}">${result.status}</td>
+                </tr>`;
+            });
+            html += '</table>';
+
+            document.getElementById('detectionResults').innerHTML = html;
+
+            console.log('\n🎉 SD Detection Tests Complete!');
+        }
+
+        // Run tests when page loads
+        setTimeout(runTests, 500);
+    </script>
+</body>
+</html>

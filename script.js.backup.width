@@ -3181,6 +3181,9 @@ class NavigationManager {
         const sitesSelectLength1 = document.getElementById('sitesSelectLength1');
         const generateSiteComparisonLengthBtn = document.getElementById('generateSiteComparisonLengthBtn');
 
+        const siteSelectLength2 = document.getElementById('siteSelectLength2');
+        const lengthVarsSelect2 = document.getElementById('lengthVarsSelect2');
+        const generateVariableComparisonLengthBtn = document.getElementById('generateVariableComparisonLengthBtn');
 
         // Add event listeners for length distribution buttons
         const updateLengthSiteComparisonButton = () => {
@@ -3191,10 +3194,19 @@ class NavigationManager {
             }
         };
 
+        const updateLengthVariableComparisonButton = () => {
+            const siteSelected = siteSelectLength2?.value;
+            const varsSelected = Array.from(lengthVarsSelect2?.selectedOptions || []).map(option => option.value);
+            if (generateVariableComparisonLengthBtn) {
+                generateVariableComparisonLengthBtn.disabled = !siteSelected || varsSelected.length < 1;
+            }
+        };
 
         // Add event listeners for length controls
         if (lengthSelect1) lengthSelect1.addEventListener('change', updateLengthSiteComparisonButton);
         if (sitesSelectLength1) sitesSelectLength1.addEventListener('change', updateLengthSiteComparisonButton);
+        if (siteSelectLength2) siteSelectLength2.addEventListener('change', updateLengthVariableComparisonButton);
+        if (lengthVarsSelect2) lengthVarsSelect2.addEventListener('change', updateLengthVariableComparisonButton);
 
         // Length button click handlers
         if (generateSiteComparisonLengthBtn) {
@@ -3205,35 +3217,13 @@ class NavigationManager {
             });
         }
 
-
-        // Width distribution controls
-        const widthSelect1 = document.getElementById('widthSelect1');
-        const sitesSelectWidth1 = document.getElementById('sitesSelectWidth1');
-        const generateSiteComparisonWidthBtn = document.getElementById('generateSiteComparisonWidthBtn');
-
-
-        // Add event listeners for width distribution buttons
-        const updateWidthSiteComparisonButton = () => {
-            const siteSelected = sitesSelectWidth1?.value;
-            const varsSelected = Array.from(widthSelect1?.selectedOptions || []).map(option => option.value);
-            if (generateSiteComparisonWidthBtn) {
-                generateSiteComparisonWidthBtn.disabled = !siteSelected || varsSelected.length < 1;
-            }
-        };
-
-
-        // Add event listeners for width controls
-        if (widthSelect1) widthSelect1.addEventListener('change', updateWidthSiteComparisonButton);
-        if (sitesSelectWidth1) sitesSelectWidth1.addEventListener('change', updateWidthSiteComparisonButton);
-
-        if (generateSiteComparisonWidthBtn) {
-            generateSiteComparisonWidthBtn.addEventListener('click', () => {
-                const site = sitesSelectWidth1.value;
-                const widthVars = Array.from(widthSelect1.selectedOptions).map(option => option.value);
-                this.generateWidthDistributionFromFirstCard(site, widthVars);
+        if (generateVariableComparisonLengthBtn) {
+            generateVariableComparisonLengthBtn.addEventListener('click', () => {
+                const site = siteSelectLength2.value;
+                const lengthVars = Array.from(lengthVarsSelect2.selectedOptions).map(option => option.value);
+                this.generateLengthVariableComparison(site, lengthVars);
             });
         }
-
     }
 
     async updatePlotPageFileInfo(pageName = 'plot') {
@@ -3523,12 +3513,11 @@ class NavigationManager {
         // Update length distribution dropdowns
         this.updateLengthDropdowns(hr24Files, this.stdFiles, pageName);
 
-        // Update width distribution dropdowns
-        this.updateWidthDropdowns(hr24Files, this.stdFiles, pageName);
-
         // Update blade count dropdowns
         this.updateBladeCountDropdowns(pageName);
 
+        // Update std dropdowns
+        this.updateStdDropdowns(sources, this.stdFiles, pageName);
     }
 
     updateBladeCountDropdowns(pageName = 'plot') {
@@ -3620,57 +3609,79 @@ class NavigationManager {
         }
     }
 
-    updateWidthDropdowns(hr24Files, stdFiles, pageName = 'plot') {
-        console.log("🎛️ DEBUG: Starting width distribution dropdown update process");
-
-        // Look for the specific files that should contain width data (like Indiv files)
-        const widthDataFiles = [];
-
-        // Check if availableFiles contains the expected files
-        if (this.availableFiles && this.availableFiles.length > 0) {
-            // Look for Indiv files (which should contain width data)
-            const individFiles = this.availableFiles.filter(file =>
-                file.name.includes('Indiv') || file.name.includes('_indiv')
-            );
-            widthDataFiles.push(...individFiles);
-
-            // Also check for Summary files as backup
-            const summaryFiles = this.availableFiles.filter(file =>
-                file.name.includes('Summary') || file.name.includes('_summary')
-            );
-            widthDataFiles.push(...summaryFiles);
-        }
-
-        console.log("📁 DEBUG: Found width data files:", widthDataFiles.map(f => f.name));
+    updateStdDropdowns(sources, stdFiles, pageName = 'plot') {
         const idPrefix = "";
 
-        // Update sites dropdown for width site comparison (width data files) - single select
-        const sitesSelectWidth1 = document.getElementById(idPrefix + 'sitesSelectWidth1');
-        if (sitesSelectWidth1) {
-            console.log("🎯 DEBUG: Found sitesSelectWidth1 dropdown, populating with width data files");
-            sitesSelectWidth1.innerHTML = '<option value="">Select a CSV file...</option>';
-            widthDataFiles.forEach(file => {
+        // Update source dropdown for std site comparison (DPM columns)
+        const sourceSelectStd1 = document.getElementById(idPrefix + 'sourceSelectStd1');
+        if (sourceSelectStd1) {
+            sourceSelectStd1.innerHTML = '<option value="">Select DPM column to plot...</option>';
+            sources.forEach(source => {
                 const option = document.createElement('option');
-                option.value = file.name;
+                option.value = source;
+                option.textContent = source;
+                sourceSelectStd1.appendChild(option);
+            });
+
+            // Auto-select first source if available
+            if (sources.length > 0) {
+                sourceSelectStd1.value = sources[0];
+            }
+        }
+
+        // Update sites dropdown for std site comparison (_std files)
+        const sitesSelectStd1 = document.getElementById(idPrefix + 'sitesSelectStd1');
+        if (sitesSelectStd1) {
+            sitesSelectStd1.innerHTML = '';
+            stdFiles.forEach((file, index) => {
+                const option = document.createElement('option');
+                option.value = file.name; // Use full filename as value
                 option.textContent = file.name;
-                sitesSelectWidth1.appendChild(option);
+                sitesSelectStd1.appendChild(option);
+
+                // Auto-select first 2 files if available
+                if (index < 2 && stdFiles.length >= 2) {
+                    option.selected = true;
+                }
             });
         }
 
-        // Update site dropdown for width variable comparison (width data files)
-        const siteSelectWidth2 = document.getElementById(idPrefix + 'siteSelectWidth2');
-        if (siteSelectWidth2) {
-            console.log("🎯 DEBUG: Found siteSelectWidth2 dropdown, populating with width data files");
-            siteSelectWidth2.innerHTML = '<option value="">Select a CSV file...</option>';
-            widthDataFiles.forEach(file => {
+        // Update site dropdown for std source comparison (_std files)
+        const siteSelectStd2 = document.getElementById(idPrefix + 'siteSelectStd2');
+        if (siteSelectStd2) {
+            siteSelectStd2.innerHTML = '<option value="">Select a _std.csv file...</option>';
+            stdFiles.forEach(file => {
                 const option = document.createElement('option');
-                option.value = file.name;
+                option.value = file.name; // Use full filename as value
                 option.textContent = file.name;
-                siteSelectWidth2.appendChild(option);
+                siteSelectStd2.appendChild(option);
             });
         }
+
+        // Update sources dropdown for std source comparison
+        const sourcesSelectStd2 = document.getElementById(idPrefix + 'sourcesSelectStd2');
+        if (sourcesSelectStd2) {
+            sourcesSelectStd2.innerHTML = '';
+            sources.forEach(source => {
+                const option = document.createElement('option');
+                option.value = source;
+                option.textContent = source;
+                sourcesSelectStd2.appendChild(option);
+            });
+        }
+
+        // Trigger button state updates after setting defaults
+        setTimeout(() => {
+            // Trigger std site comparison button update
+            const sourceSelectStd1 = document.getElementById('sourceSelectStd1');
+            const sitesSelectStd1 = document.getElementById('sitesSelectStd1');
+            if (sourceSelectStd1 && sitesSelectStd1) {
+                const event = new Event('change');
+                sourceSelectStd1.dispatchEvent(event);
+                sitesSelectStd1.dispatchEvent(event);
+            }
+        }, 100);
     }
-
 
     updateStatusDisplay() {
         const availableFilesStatus = document.getElementById('availableFilesStatus');
@@ -5407,7 +5418,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create length distribution chart
-            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv, site);
+            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv);
             console.log('Length distribution chart created successfully');
 
         } catch (error) {
@@ -5477,7 +5488,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create length distribution chart
-            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv, site);
+            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv);
             console.log('Length distribution chart created successfully');
 
         } catch (error) {
@@ -5489,865 +5500,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 </div>
             `;
         }
-    }
-
-    // Width distribution methods
-    async generateWidthDistributionFromFirstCard(site, widthVars) {
-        console.log('=== GENERATE WIDTH DISTRIBUTION FROM FIRST CARD START ===');
-        console.log('Site:', site);
-        console.log('Width Variables:', widthVars);
-
-        const outputDiv = document.getElementById('siteComparisonWidthOutput');
-        if (!outputDiv) {
-            console.error('Width distribution output div not found');
-            return;
-        }
-
-        outputDiv.classList.add('active');
-
-        // Show loading message
-        outputDiv.innerHTML = `
-            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
-                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Width Distribution Plot...</h4>
-                <p>Loading ${site} data for variables: ${widthVars.join(', ')}</p>
-            </div>
-        `;
-
-        try {
-            console.log('Starting to load file for width distribution...');
-            // Load the CSV file using the same approach as Blade Count
-            const rawData = await this.loadWidthData(site);
-
-            console.log(`Loaded ${rawData.length} rows of data for width distribution`);
-
-            if (!rawData || rawData.length === 0) {
-                throw new Error('No valid data found for the selected site');
-            }
-
-            // Create width distribution chart
-            this.renderWidthDistributionChart(rawData, widthVars, outputDiv, site);
-            console.log('Width distribution chart created successfully');
-
-        } catch (error) {
-            console.error('Error in width distribution chart creation:', error);
-            outputDiv.innerHTML = `
-                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
-                    <p><strong>Plot creation failed:</strong> ${error.message}</p>
-                </div>
-            `;
-        }
-    }
-
-    async generateWidthSiteComparison(widthVar, sites) {
-        console.log('=== GENERATE WIDTH SITE COMPARISON START ===');
-        console.log('Width Variable:', widthVar);
-        console.log('Sites:', sites);
-
-        // This method would be for comparing the same variable across multiple sites
-        // For now, redirect to the single-site comparison since we typically work with one file at a time
-        const outputDiv = document.getElementById('variableComparisonWidthOutput');
-        if (!outputDiv) {
-            console.error('Width variable comparison output div not found');
-            return;
-        }
-
-        outputDiv.classList.add('active');
-
-        // Show loading message
-        outputDiv.innerHTML = `
-            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
-                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Width Distribution Plot...</h4>
-                <p>Loading ${site} data for variables: ${widthVars.join(', ')}</p>
-            </div>
-        `;
-
-        try {
-            console.log('Starting to load file for width distribution...');
-            // Load the CSV file using the same approach as Blade Count
-            const rawData = await this.loadWidthData(site);
-
-            console.log(`Loaded ${rawData.length} rows of data for width distribution`);
-
-            if (!rawData || rawData.length === 0) {
-                throw new Error('No valid data found for the selected site');
-            }
-
-            // Create width distribution chart
-            this.renderWidthDistributionChart(rawData, widthVars, outputDiv, site);
-            console.log('Width distribution chart created successfully');
-
-        } catch (error) {
-            console.error('Error in width distribution chart creation:', error);
-            outputDiv.innerHTML = `
-                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
-                    <p><strong>Plot creation failed:</strong> ${error.message}</p>
-                </div>
-            `;
-        }
-    }
-
-    async generateWidthVariableComparison(site, widthVars) {
-        console.log('=== GENERATE WIDTH VARIABLE COMPARISON START ===');
-        console.log('Site:', site);
-        console.log('Width Variables:', widthVars);
-
-        const outputDiv = document.getElementById('variableComparisonWidthOutput');
-        if (!outputDiv) {
-            console.error('Width variable comparison output div not found');
-            return;
-        }
-
-        outputDiv.classList.add('active');
-
-        // Show loading message
-        outputDiv.innerHTML = `
-            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
-                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Width Distribution Plot...</h4>
-                <p>Loading ${site} data for variables: ${widthVars.join(', ')}</p>
-            </div>
-        `;
-
-        try {
-            console.log('Starting to load file for width distribution...');
-            // Load the CSV file using the same approach as Blade Count
-            const rawData = await this.loadWidthData(site);
-
-            console.log(`Loaded ${rawData.length} rows of data for width distribution`);
-
-            if (!rawData || rawData.length === 0) {
-                throw new Error('No valid data found for the selected site');
-            }
-
-            // Create width distribution chart
-            this.renderWidthDistributionChart(rawData, widthVars, outputDiv, site);
-            console.log('Width distribution chart created successfully');
-
-        } catch (error) {
-            console.error('Error in width distribution chart creation:', error);
-            outputDiv.innerHTML = `
-                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
-                    <p><strong>Plot creation failed:</strong> ${error.message}</p>
-                </div>
-            `;
-        }
-    }
-
-    async loadWidthData(filename) {
-        console.log('=== LOADING WIDTH DATA ===');
-        console.log('Requested filename:', filename);
-
-        // Find the selected file in loaded files (exact match only, like blade count)
-        let selectedFile = null;
-        if (csvManager && csvManager.workingDirFiles) {
-            console.log('Available files:', csvManager.workingDirFiles.map(f => f.name));
-            selectedFile = csvManager.workingDirFiles.find(file => file.name === filename);
-        }
-
-        if (!selectedFile) {
-            throw new Error(`File "${filename}" not found. Please load it using the "Select CSV Files" button first.`);
-        }
-
-        console.log('Loading file:', selectedFile.name);
-        return this.parseCSVFile(selectedFile);
-    }
-
-    renderWidthDistributionChart(rawData, widthVars, outputDiv, filename = 'unknown') {
-        console.log('🎨 === RENDERING WIDTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
-        console.log(`📁 Processing file: ${filename}`);
-        console.log(`📋 Raw data rows: ${rawData.length}`);
-        console.log(`📊 Width variables: ${widthVars}`);
-
-        // Clear any previous processing state for clean file isolation
-        console.log('🧹 Clearing previous processing state for clean file isolation');
-
-        try {
-            // Validate input parameters
-            if (!rawData || !Array.isArray(rawData)) {
-                throw new Error('Invalid raw data provided');
-            }
-
-            if (!widthVars || !Array.isArray(widthVars) || widthVars.length === 0) {
-                throw new Error('No width variables provided');
-            }
-
-            if (!outputDiv) {
-                throw new Error('No output div provided');
-            }
-
-            // For now, we'll work with the first selected variable (like blade count works with one parameter)
-            const selectedVariable = widthVars[0];
-            console.log(`📊 Processing width variable: ${selectedVariable}`);
-
-            // Verify data isolation - log sample of data for verification
-            console.log('🔍 WIDTH DATA ISOLATION CHECK:');
-            if (rawData.length > 0) {
-                const sampleRows = rawData.slice(0, 3);
-                console.log(`📋 First 3 rows from ${filename}:`, sampleRows.map(row => ({
-                    sampleId: row['sample ID'] || row.sampleId || row.sample_id,
-                    selectedVar: row[selectedVariable]
-                })));
-            }
-
-            // Create output container with table option
-            const chartContainer = document.createElement('div');
-            chartContainer.style.cssText = `
-                background: white;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 20px;
-                margin-bottom: 20px;
-            `;
-
-            // Map AV variable to individual column name
-            const individualColumn = this.mapVariableToIndividualColumn(selectedVariable);
-
-            // Try to extract individual measurements first
-            let aggregatedData = [];
-            let chartType = 'Simple Chart';
-
-            if (individualColumn) {
-                console.log(`🔍 Attempting individual data extraction for: ${individualColumn}`);
-                try {
-                    const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn, filename);
-
-                    if (Object.keys(stationMeasurements).length > 0) {
-                        console.log(`✅ WIDTH INDIVIDUAL DATA: Found measurements for ${Object.keys(stationMeasurements).length} stations in ${filename}`);
-                        console.log(`📍 Width stations: ${Object.keys(stationMeasurements).sort().join(', ')}`);
-
-                        // Apply subset filtering if needed
-                        const filteredMeasurements = this.filterStationMeasurementsBySubset(stationMeasurements, selectedVariable);
-
-                        // Convert to aggregated format with box plot statistics
-                        aggregatedData = Object.entries(filteredMeasurements).map(([station, measurements]) => {
-                            const values = measurements.map(m => m.value).sort((a, b) => a - b);
-
-                            if (values.length === 0) return null;
-
-                            const q1 = this.calculateQuantile(values, 0.25);
-                            const median = this.calculateQuantile(values, 0.5);
-                            const q3 = this.calculateQuantile(values, 0.75);
-                            const iqr = q3 - q1;
-                            const lowerWhisker = Math.max(values[0], q1 - 1.5 * iqr);
-                            const upperWhisker = Math.min(values[values.length - 1], q3 + 1.5 * iqr);
-
-                            const outliers = values.filter(v => v < lowerWhisker || v > upperWhisker);
-
-                            return {
-                                station: station,
-                                average: values.reduce((a, b) => a + b, 0) / values.length,
-                                hasBoxPlot: true,
-                                count: values.length,
-                                statistics: {
-                                    min: values[0],
-                                    q1: q1,
-                                    median: median,
-                                    q3: q3,
-                                    max: values[values.length - 1],
-                                    lowerWhisker: lowerWhisker,
-                                    upperWhisker: upperWhisker,
-                                    outliers: outliers
-                                }
-                            };
-                        }).filter(item => item !== null);
-
-                        chartType = 'Box Plot';
-                    }
-                } catch (error) {
-                    console.log('⚠️ Individual data extraction failed, falling back to averages:', error.message);
-                }
-            }
-
-            // Fallback to simple average if no individual data
-            if (aggregatedData.length === 0) {
-                console.log('📊 Creating simple average chart');
-                aggregatedData = this.aggregateDataByStationForChart(rawData, selectedVariable);
-                chartType = 'Simple Chart';
-            }
-
-            console.log(`📈 Chart data prepared: ${aggregatedData.length} stations, type: ${chartType}`);
-
-            // Create toggle buttons for chart/table view
-            const toggleContainer = document.createElement('div');
-            toggleContainer.style.cssText = `
-                display: flex;
-                gap: 10px;
-                margin-bottom: 15px;
-                justify-content: flex-end;
-            `;
-
-            const chartBtn = document.createElement('button');
-            chartBtn.textContent = '📊 Chart View';
-            chartBtn.style.cssText = `
-                padding: 8px 16px;
-                background: #3b82f6;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-            `;
-
-            const tableBtn = document.createElement('button');
-            tableBtn.textContent = '📋 Table View';
-            tableBtn.style.cssText = `
-                padding: 8px 16px;
-                background: #6b7280;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-            `;
-
-            toggleContainer.appendChild(chartBtn);
-            toggleContainer.appendChild(tableBtn);
-            chartContainer.appendChild(toggleContainer);
-
-            // Create canvas for chart
-            const canvas = document.createElement('canvas');
-            canvas.width = 576;
-            canvas.height = 360;
-            canvas.id = 'widthDistributionChart';
-            chartContainer.appendChild(canvas);
-
-            // Add chart container to output div
-            outputDiv.innerHTML = '';
-            outputDiv.appendChild(chartContainer);
-
-            try {
-                // Render the chart with station-based data
-                console.log(`📊 WIDTH RENDERING: Creating chart for ${aggregatedData.length} stations from ${filename}`);
-                console.log(`📈 Final width station list: ${aggregatedData.map(d => d.station).join(', ')}`);
-                this.drawWidthDistributionChart(canvas, aggregatedData, selectedVariable);
-                console.log(`✅ WIDTH CHART COMPLETE: Successfully rendered chart for ${filename}`);
-
-            } catch (drawError) {
-                console.error('❌ Error drawing chart:', drawError);
-
-                // Replace canvas with error message
-                chartContainer.removeChild(canvas);
-                const errorDiv = document.createElement('div');
-                errorDiv.style.cssText = `
-                    background: #fef2f2;
-                    border: 1px solid #f87171;
-                    border-radius: 6px;
-                    padding: 15px;
-                    text-align: center;
-                `;
-                errorDiv.innerHTML = `
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Chart Rendering Error</h4>
-                    <p>Failed to render the ${chartType.toLowerCase()}</p>
-                    <p><small>Error: ${drawError.message}</small></p>
-                `;
-                chartContainer.appendChild(errorDiv);
-            }
-
-            // Add event listeners for toggle buttons
-            chartBtn.addEventListener('click', () => {
-                canvas.style.display = 'block';
-                const table = chartContainer.querySelector('table');
-                if (table) table.style.display = 'none';
-
-                chartBtn.style.background = '#3b82f6';
-                tableBtn.style.background = '#6b7280';
-            });
-
-            tableBtn.addEventListener('click', () => {
-                // Create table if it doesn't exist
-                let table = chartContainer.querySelector('table');
-                if (!table) {
-                    table = this.createWidthDistributionTable(aggregatedData, selectedVariable);
-                    chartContainer.appendChild(table);
-                }
-
-                canvas.style.display = 'none';
-                table.style.display = 'table';
-
-                tableBtn.style.background = '#3b82f6';
-                chartBtn.style.background = '#6b7280';
-            });
-
-        } catch (error) {
-            console.error('❌ Error in renderWidthDistributionChart:', error);
-
-            outputDiv.innerHTML = `
-                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Rendering Error</h4>
-                    <p>Failed to create width distribution chart</p>
-                    <p><strong>Error:</strong> ${error.message}</p>
-                    <details style="margin-top: 10px;">
-                        <summary style="cursor: pointer;">Technical Details</summary>
-                        <pre style="background: #f8f8f8; padding: 10px; border-radius: 4px; margin-top: 5px; font-size: 11px;">${error.stack || 'No stack trace available'}</pre>
-                    </details>
-                </div>
-            `;
-        }
-    }
-
-    drawWidthDistributionChart(canvas, data, selectedVariable) {
-        console.log('🎨 === DRAWING TRUE BOX PLOTS ===');
-        console.log('Data width:', data.length);
-
-        const ctx = canvas.getContext('2d');
-        const padding = 80;
-        const chartWidth = canvas.width - 2 * padding;
-        const chartHeight = canvas.height - 2 * padding;
-
-        // Clear canvas with white background
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Determine chart type based on box plot availability
-        const hasBoxPlots = data.some(d => d.hasBoxPlot && d.statistics);
-        const chartTitle = hasBoxPlots
-            ? `${selectedVariable} Distribution by Station (Box Plots)`
-            : `Average ${selectedVariable} by Station`;
-
-        console.log(`📊 Chart type: ${hasBoxPlots ? 'Box Plot' : 'Regular Bar Chart'}`);
-
-        if (data.length === 0) {
-            // Draw "No data" message
-            ctx.fillStyle = '#374151';
-            ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
-            return;
-        }
-
-        // Sort stations naturally (handle both string and numeric sorting)
-        data.sort((a, b) => {
-            const aStation = a.station.toString();
-            const bStation = b.station.toString();
-
-            // Try numeric sort first
-            const aNum = parseFloat(aStation);
-            const bNum = parseFloat(bStation);
-
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return aNum - bNum;
-            }
-
-            // Fall back to string sort
-            return aStation.localeCompare(bStation);
-        });
-
-        const stations = data.map(d => d.station);
-        const boxWidth = Math.min(40, chartWidth / stations.length * 0.6);
-
-        let yMin, yMax;
-
-        if (hasBoxPlots) {
-            // Calculate Y range from box plot statistics
-            const allValues = [];
-            data.forEach(d => {
-                if (d.statistics) {
-                    allValues.push(d.statistics.min, d.statistics.max);
-                    if (d.statistics.outliers) {
-                        allValues.push(...d.statistics.outliers);
-                    }
-                }
-            });
-            yMin = Math.min(...allValues);
-            yMax = Math.max(...allValues);
-        } else {
-            // Calculate Y range from average values
-            const values = data.map(d => d.average).filter(v => !isNaN(v));
-            if (values.length === 0) {
-                ctx.fillStyle = '#374151';
-                ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('No valid data to display', canvas.width / 2, canvas.height / 2);
-                return;
-            }
-            yMin = Math.min(...values);
-            yMax = Math.max(...values);
-        }
-
-        // Add padding to Y range
-        const yRange = yMax - yMin;
-        const yPadding = yRange * 0.1;
-        yMin = Math.max(0, yMin - yPadding);
-        yMax = yMax + yPadding;
-
-        console.log(`📈 Y-axis range: ${yMin.toFixed(2)} to ${yMax.toFixed(2)}`);
-
-        // Calculate position helpers
-        const getX = (index) => padding + (index + 0.5) * (chartWidth / stations.length);
-        const getY = (value) => padding + (1 - (value - yMin) / (yMax - yMin)) * chartHeight;
-
-        // Draw frame lines (light gray box around plot area)
-        ctx.strokeStyle = '#d1d5db';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(padding, padding, chartWidth, chartHeight);
-
-        // Draw Y-axis gridlines and labels
-        const numYTicks = 6;
-        ctx.fillStyle = '#6b7280';
-        ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'right';
-
-        for (let i = 0; i <= numYTicks; i++) {
-            const value = yMin + (yMax - yMin) * (i / numYTicks);
-            const y = getY(value);
-
-            // Draw gridline
-            ctx.strokeStyle = '#f3f4f6';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(padding, y);
-            ctx.lineTo(padding + chartWidth, y);
-            ctx.stroke();
-
-            // Draw label
-            ctx.fillStyle = '#6b7280';
-            ctx.fillText(value.toFixed(1), padding - 10, y + 4);
-        }
-
-        // Draw data based on chart type
-        if (hasBoxPlots) {
-            // Draw box plots with whiskers
-            console.log('🎨 Drawing box plots...');
-
-            data.forEach((item, index) => {
-                if (!item.statistics) return;
-
-                const x = getX(index);
-                const stats = item.statistics;
-
-                const minY = getY(stats.lowerWhisker);
-                const q1Y = getY(stats.q1);
-                const medianY = getY(stats.median);
-                const q3Y = getY(stats.q3);
-                const maxY = getY(stats.upperWhisker);
-
-                // Draw whisker lines (vertical)
-                ctx.strokeStyle = '#4b5563';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x, minY);
-                ctx.lineTo(x, q1Y);
-                ctx.moveTo(x, q3Y);
-                ctx.lineTo(x, maxY);
-                ctx.stroke();
-
-                // Draw whisker caps
-                ctx.beginPath();
-                ctx.moveTo(x - boxWidth/4, minY);
-                ctx.lineTo(x + boxWidth/4, minY);
-                ctx.moveTo(x - boxWidth/4, maxY);
-                ctx.lineTo(x + boxWidth/4, maxY);
-                ctx.stroke();
-
-                // Draw box (Q1 to Q3)
-                ctx.fillStyle = '#e5e7eb';
-                ctx.strokeStyle = '#4b5563';
-                ctx.lineWidth = 1;
-                const boxHeight = q1Y - q3Y;
-                ctx.fillRect(x - boxWidth/2, q3Y, boxWidth, boxHeight);
-                ctx.strokeRect(x - boxWidth/2, q3Y, boxWidth, boxHeight);
-
-                // Draw median line (bright red)
-                ctx.strokeStyle = '#dc2626';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(x - boxWidth/2, medianY);
-                ctx.lineTo(x + boxWidth/2, medianY);
-                ctx.stroke();
-
-                // Draw outliers
-                if (stats.outliers && stats.outliers.length > 0) {
-                    ctx.fillStyle = '#dc2626';
-                    stats.outliers.forEach(outlier => {
-                        const outlierY = getY(outlier);
-                        ctx.beginPath();
-                        ctx.arc(x, outlierY, 2, 0, 2 * Math.PI);
-                        ctx.fill();
-                    });
-                }
-            });
-        } else {
-            // Draw simple bar chart
-            console.log('🎨 Drawing bar chart...');
-
-            data.forEach((item, index) => {
-                const x = getX(index);
-                const y = getY(item.average);
-                const barHeight = getY(yMin) - y;
-
-                // Draw bar
-                ctx.fillStyle = '#3b82f6';
-                ctx.fillRect(x - boxWidth/2, y, boxWidth, barHeight);
-
-                // Draw bar border
-                ctx.strokeStyle = '#1d4ed8';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x - boxWidth/2, y, boxWidth, barHeight);
-            });
-        }
-
-        // Draw X-axis labels (station names)
-        ctx.fillStyle = '#374151';
-        ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'center';
-        stations.forEach((station, index) => {
-            const x = getX(index);
-            ctx.fillText(station, x, padding + chartHeight + 20);
-        });
-
-        // Add chart title
-        ctx.fillStyle = '#555';
-        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(chartTitle, padding, 50);
-
-        // Y-axis title
-        ctx.save();
-        ctx.translate(25, canvas.height / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillStyle = '#374151';
-        ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'center';
-        const yAxisTitle = hasBoxPlots ? 'Width (cm) Distribution' : 'Average Width (cm)';
-        ctx.fillText(yAxisTitle, 0, 0);
-        ctx.restore();
-
-        // X-axis title
-        ctx.fillStyle = '#374151';
-        ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 50);
-
-        console.log('✅ Chart drawing completed');
-    }
-
-    createWidthDistributionTable(data, selectedVariable) {
-        console.log('📋 Creating width distribution table');
-
-        const table = document.createElement('table');
-        table.style.cssText = `
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 12px;
-            display: none;
-        `;
-
-        // Create header
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-
-        const headers = ['Station', 'Count', 'Average'];
-
-        // Add box plot specific headers if applicable
-        const hasBoxPlots = data.some(d => d.hasBoxPlot && d.statistics);
-        if (hasBoxPlots) {
-            headers.push('Min', 'Q1', 'Median', 'Q3', 'Max', 'Outliers');
-        }
-
-        headers.forEach(header => {
-            const th = document.createElement('th');
-            th.textContent = header;
-            th.style.cssText = `
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                padding: 8px;
-                text-align: left;
-                font-weight: 600;
-            `;
-            headerRow.appendChild(th);
-        });
-
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-
-        // Create body
-        const tbody = document.createElement('tbody');
-
-        // Sort data by station
-        const sortedData = [...data].sort((a, b) => {
-            const aStation = a.station.toString();
-            const bStation = b.station.toString();
-
-            const aNum = parseFloat(aStation);
-            const bNum = parseFloat(bStation);
-
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return aNum - bNum;
-            }
-
-            return aStation.localeCompare(bStation);
-        });
-
-        sortedData.forEach(item => {
-            const row = document.createElement('tr');
-
-            // Station
-            const stationCell = document.createElement('td');
-            stationCell.textContent = item.station;
-            stationCell.style.cssText = `
-                border: 1px solid #e5e7eb;
-                padding: 8px;
-                font-weight: 500;
-            `;
-            row.appendChild(stationCell);
-
-            // Count
-            const countCell = document.createElement('td');
-            countCell.textContent = item.count || '-';
-            countCell.style.cssText = `
-                border: 1px solid #e5e7eb;
-                padding: 8px;
-                text-align: center;
-            `;
-            row.appendChild(countCell);
-
-            // Average
-            const avgCell = document.createElement('td');
-            avgCell.textContent = item.average ? item.average.toFixed(2) : '-';
-            avgCell.style.cssText = `
-                border: 1px solid #e5e7eb;
-                padding: 8px;
-                text-align: center;
-            `;
-            row.appendChild(avgCell);
-
-            // Box plot statistics if available
-            if (hasBoxPlots) {
-                const stats = item.statistics;
-
-                [
-                    stats?.min?.toFixed(2) || '-',
-                    stats?.q1?.toFixed(2) || '-',
-                    stats?.median?.toFixed(2) || '-',
-                    stats?.q3?.toFixed(2) || '-',
-                    stats?.max?.toFixed(2) || '-',
-                    stats?.outliers?.length > 0 ? stats.outliers.map(o => o.toFixed(2)).join(', ') : 'None'
-                ].forEach(value => {
-                    const cell = document.createElement('td');
-                    cell.textContent = value;
-                    cell.style.cssText = `
-                        border: 1px solid #e5e7eb;
-                        padding: 8px;
-                        text-align: center;
-                        font-family: monospace;
-                        font-size: 11px;
-                    `;
-                    row.appendChild(cell);
-                });
-            }
-
-            tbody.appendChild(row);
-        });
-
-        table.appendChild(tbody);
-
-        console.log('✅ Width distribution table created');
-        return table;
-    }
-
-    // Filter station measurements by subset (for box plots)
-    filterStationMeasurementsBySubset(stationMeasurements, selectedVariable) {
-        console.log('🔍 Filtering station measurements by subset for:', selectedVariable);
-
-        // Log all unique subset values found across all stations for debugging
-        const allMeasurements = Object.values(stationMeasurements).flat();
-        const uniqueSubsets = [...new Set(allMeasurements.map(m => m.subset))];
-        console.log(`🔍 WIDTH SUBSET DEBUG: Found subset values in data: ${uniqueSubsets.join(', ')}`);
-
-        // Determine target subset based on variable
-        let targetSubset = 'all';
-        if (selectedVariable.includes('sml_')) {
-            targetSubset = 'small';
-        } else if (selectedVariable.includes('lrg_')) {
-            targetSubset = 'large';
-        }
-
-        console.log(`📊 Target subset: ${targetSubset}`);
-
-        const filteredStationMeasurements = {};
-
-        Object.entries(stationMeasurements).forEach(([station, measurements]) => {
-            if (targetSubset === 'all') {
-                // Use all measurements
-                filteredStationMeasurements[station] = measurements;
-            } else {
-                // Case-insensitive subset filtering to handle "small"/"Small" and "large"/"Large"
-                const filtered = measurements.filter(m => m.subset && m.subset.toLowerCase() === targetSubset.toLowerCase());
-                console.log(`📊 Station ${station}: ${filtered.length}/${measurements.length} measurements match ${targetSubset}`);
-                if (filtered.length > 0) {
-                    filteredStationMeasurements[station] = filtered;
-                }
-            }
-        });
-
-        console.log(`📊 WIDTH FILTERING RESULT: Filtered from ${Object.keys(stationMeasurements).length} to ${Object.keys(filteredStationMeasurements).length} stations`);
-        return filteredStationMeasurements;
-    }
-
-    // Calculate quantiles for box plot statistics
-    calculateQuantile(values, percentile) {
-        const sorted = [...values].sort((a, b) => a - b);
-        const index = percentile * (sorted.length - 1);
-
-        if (Math.floor(index) === index) {
-            return sorted[index];
-        } else {
-            const lower = sorted[Math.floor(index)];
-            const upper = sorted[Math.ceil(index)];
-            return lower + (upper - lower) * (index - Math.floor(index));
-        }
-    }
-
-    // Data aggregation method for simple charts (fallback when box plots aren't available)
-    aggregateDataByStationForChart(rawData, selectedVariable) {
-        console.log('📊 === AGGREGATING DATA BY STATION FOR SIMPLE CHART ===');
-        console.log('Raw data rows:', rawData.length);
-        console.log('Selected variable:', selectedVariable);
-
-        const grouped = {};
-        const stationSet = new Set();
-
-        // Group data by station and collect values
-        rawData.forEach(row => {
-            const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
-            const value = parseFloat(row[selectedVariable]);
-
-            // Skip rows without valid station ID or numeric value
-            if (!sampleId || isNaN(value) || value <= 0) {
-                return;
-            }
-
-            stationSet.add(sampleId);
-
-            if (!grouped[sampleId]) {
-                grouped[sampleId] = [];
-            }
-            grouped[sampleId].push(value);
-        });
-
-        // Convert to chart format
-        const stations = Array.from(stationSet).sort((a, b) =>
-            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-        );
-
-        const result = stations.map(station => {
-            const values = grouped[station];
-            const average = values.reduce((sum, val) => sum + val, 0) / values.length;
-
-            return {
-                station: station,
-                average: average,
-                count: values.length,
-                hasBoxPlot: false
-            };
-        });
-
-        console.log(`✅ Aggregated data for ${result.length} stations`);
-        return result;
     }
 
     // Color methods for plots
@@ -7108,11 +6260,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 
     // Extract individual blade measurements from raw data for true whisker plots
-    extractIndividualBladeData(rawData, measurementType, filename = 'unknown') {
+    extractIndividualBladeData(rawData, measurementType) {
         console.log('🔍 === EXTRACTING INDIVIDUAL BLADE DATA ===');
-        console.log(`📁 Processing file: ${filename}`);
-        console.log(`📊 Measurement type: ${measurementType}`);
-        console.log(`📋 Raw data rows: ${rawData.length}`);
+        console.log(`Measurement type: ${measurementType}`);
+        console.log(`Raw data rows: ${rawData.length}`);
 
         const stationMeasurements = {};
         const stationSet = new Set();
@@ -7156,10 +6307,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             console.log(`📊 Station ${station}: ${count} measurements (${min.toFixed(1)}-${max.toFixed(1)})`);
         });
 
-        console.log(`✅ EXTRACTION COMPLETE for file: ${filename}`);
-        console.log(`📈 Found ${stations.length} unique stations: ${stations.join(', ')}`);
-        console.log(`🔢 Total measurements: ${Object.values(stationMeasurements).reduce((sum, arr) => sum + arr.length, 0)}`);
-
+        console.log(`✅ Extracted individual data for ${stations.length} stations`);
         return stationMeasurements;
     }
 
@@ -7191,10 +6339,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     filterMeasurementsBySubset(measurements, selectedVariable) {
         console.log('🔍 Filtering measurements by subset for:', selectedVariable);
 
-        // Log all unique subset values found in data for debugging
-        const uniqueSubsets = [...new Set(measurements.map(m => m.subset))];
-        console.log(`🔍 SUBSET DEBUG: Found subset values in data: ${uniqueSubsets.join(', ')}`);
-
         // Determine target subset based on variable
         let targetSubset = 'all';
         if (selectedVariable.includes('sml_')) {
@@ -7208,12 +6352,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return measurements.map(m => m.value);
         }
 
-        // Case-insensitive subset filtering to handle "small"/"Small" and "large"/"Large"
         const filteredMeasurements = measurements
-            .filter(m => m.subset && m.subset.toLowerCase() === targetSubset.toLowerCase())
+            .filter(m => m.subset === targetSubset)
             .map(m => m.value);
 
-        console.log(`📊 Filtered to ${targetSubset} (case-insensitive): ${filteredMeasurements.length}/${measurements.length} measurements`);
+        console.log(`📊 Filtered to ${targetSubset}: ${filteredMeasurements.length}/${measurements.length} measurements`);
         return filteredMeasurements;
     }
 
@@ -7360,11 +6503,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return false;
     }
 
-    aggregateLengthData(rawData, selectedVariable, filename = 'unknown') {
-        console.log('🎯 === AGGREGATING LENGTH DATA FOR BOX PLOTS ===');
-        console.log(`📁 File: ${filename}`);
-        console.log(`📋 Raw data rows: ${rawData.length}`);
-        console.log(`📊 Selected variable: ${selectedVariable}`);
+    aggregateLengthData(rawData, selectedVariable) {
+        console.log('🎯 === AGGREGATING INDIVIDUAL BLADE DATA FOR BOX PLOTS ===');
+        console.log('Raw data rows:', rawData.length);
+        console.log('Selected variable:', selectedVariable);
 
         try {
             // Map AV variable to individual measurement column
@@ -7375,7 +6517,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Extract individual blade measurements by station
-            const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn, filename);
+            const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn);
 
             if (Object.keys(stationMeasurements).length === 0) {
                 console.log('❌ No individual measurements extracted');
@@ -7386,9 +6528,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             const stations = Object.keys(stationMeasurements).sort((a, b) =>
                 a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
             );
-
-            console.log(`🎯 AGGREGATION PHASE: Processing ${stations.length} stations from ${filename}`);
-            console.log(`📍 Stations found: ${stations.join(', ')}`);
 
             const result = stations.map(station => {
                 console.log(`\n📊 Processing station: ${station}`);
@@ -7438,14 +6577,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             // Fallback to old method if individual data processing fails
             console.log('🔄 Falling back to summary statistics method...');
-            return this.aggregateLengthDataLegacy(rawData, selectedVariable, filename);
+            return this.aggregateLengthDataLegacy(rawData, selectedVariable);
         }
     }
 
     // Legacy aggregation method as fallback
-    aggregateLengthDataLegacy(rawData, selectedVariable, filename = 'unknown') {
+    aggregateLengthDataLegacy(rawData, selectedVariable) {
         console.log('🔄 === LEGACY AGGREGATION (SUMMARY STATS ONLY) ===');
-        console.log(`📁 Processing file: ${filename} (legacy mode)`);
 
         // Detect corresponding SD column
         const sdColumn = this.detectStandardDeviationColumn(selectedVariable);
@@ -7487,9 +6625,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
         );
 
-        console.log(`🔄 LEGACY PROCESSING: Found ${stations.length} stations in ${filename}`);
-        console.log(`📍 Legacy stations: ${stations.join(', ')}`);
-
         const result = stations.map(station => {
             const avgValues = stationGroups[station];
             const sdValues = stationSDGroups[station];
@@ -7522,19 +6657,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             };
         });
 
-        console.log(`✅ LEGACY AGGREGATION COMPLETE for ${filename}`);
-        console.log(`📊 Generated ${result.length} station entries:`, result.map(r => r.station).join(', '));
+        console.log('🎯 Legacy aggregated data:', result);
         return result;
     }
 
-    renderLengthDistributionChart(rawData, lengthVars, outputDiv, filename = 'unknown') {
-        console.log('🎨 === RENDERING LENGTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
-        console.log(`📁 Processing file: ${filename}`);
-        console.log(`📋 Raw data rows: ${rawData.length}`);
-        console.log(`📊 Length variables: ${lengthVars}`);
-
-        // Clear any previous processing state for clean file isolation
-        console.log('🧹 Clearing previous processing state for clean file isolation');
+    renderLengthDistributionChart(rawData, lengthVars, outputDiv) {
+        console.log('=== RENDERING LENGTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
+        console.log('Raw data rows:', rawData.length);
+        console.log('Length variables:', lengthVars);
 
         try {
             // Validate input parameters
@@ -7577,18 +6707,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             console.log(`✅ Validation passed for variable: ${selectedVariable}`);
 
-            // Verify data isolation - log sample of data for verification
-            console.log('🔍 DATA ISOLATION CHECK:');
-            if (rawData.length > 0) {
-                const sampleRows = rawData.slice(0, 3);
-                console.log(`📋 First 3 rows from ${filename}:`, sampleRows.map(row => ({
-                    sampleId: row['sample ID'] || row.sampleId || row.sample_id,
-                    selectedVar: row[selectedVariable]
-                })));
-            }
-
             // Aggregate data by stations using our new method with SD support
-            const aggregatedData = this.aggregateLengthData(rawData, selectedVariable, filename);
+            const aggregatedData = this.aggregateLengthData(rawData, selectedVariable);
 
             if (aggregatedData.length === 0) {
                 outputDiv.innerHTML = `
@@ -7605,8 +6725,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             const hasSDData = aggregatedData.some(d => d.hasSD);
             const chartType = hasSDData ? 'Whisker Plot with Error Bars' : 'Standard Bar Chart';
 
-            console.log(`📊 RENDERING PHASE: Creating ${chartType} for ${aggregatedData.length} stations`);
-            console.log(`📈 Station list for ${filename}: ${aggregatedData.map(d => d.station).join(', ')}`);
+            console.log(`📊 Rendering ${chartType} for ${aggregatedData.length} stations`);
 
             // Create chart container with status message
             const chartContainer = document.createElement('div');
@@ -7723,11 +6842,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillText(chartTitle, padding, 50);
 
         if (data.length === 0) {
-            // Draw "No data" message
-            ctx.fillStyle = '#374151';
-            ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
             return;
         }
 
@@ -7746,34 +6864,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             console.log(`📏 Box plot range: ${minDataValue.toFixed(1)} to ${maxDataValue.toFixed(1)}`);
         } else {
             // Fallback to avgLength for scaling
-            const values = data.map(d => d.avgLength).filter(v => !isNaN(v));
-            if (values.length === 0) {
-                ctx.fillStyle = '#374151';
-                ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('No valid data to display', canvas.width / 2, canvas.height / 2);
-                return;
-            }
-            maxDataValue = Math.max(...values);
+            maxDataValue = Math.max(...data.map(d => d.avgLength || 0));
             minDataValue = 0;
         }
-
-        // Sort stations naturally (handle both string and numeric sorting)
-        data.sort((a, b) => {
-            const aStation = a.station.toString();
-            const bStation = b.station.toString();
-
-            // Try numeric sort first
-            const aNum = parseFloat(aStation);
-            const bNum = parseFloat(bStation);
-
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return aNum - bNum;
-            }
-
-            // Fallback to string sort
-            return aStation.localeCompare(bStation);
-        });
 
         const maxValue = maxDataValue * 1.1;  // 10% buffer
         const yScale = chartHeight / maxValue;

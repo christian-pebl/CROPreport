@@ -1,0 +1,19 @@
+## 📊 Supported Data Format
+
+The app expects CROP CSV files in two formats:
+
+**Individual Measurements (`Crop_ALGA_2503_Indiv.csv`):**
+```csv
+Date,sample ID,subset,blade ID,length (cm),width (cm),AV sml_l (cm),AV sml_w (cm)
+25/03/25,4-SW-1,,1,15.2,2.8,12.5,2.1
+25/03/25,4-SW-1,,2,18.7,3.2,12.5,2.1
+```
+
+**Summary Data (`Crop_ALGA_2503_Summary.csv`):**
+```csv
+lb:kg conversion,0.454
+Date,sample ID,FW in bag (lb),FW (lb) ex bag,AV all_l (cm),fertility %
+25/03/25,4-SW-1,2.1,1.8,14.8,78.5
+```
+
+See [CROP CSV File Format](docs/CROP_CSV_SPECIFICATION.md) for complete specification.

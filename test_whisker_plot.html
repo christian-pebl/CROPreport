@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisker Plot Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        select, button {
+            margin: 5px;
+            padding: 8px 12px;
+            font-family: inherit;
+        }
+        button {
+            background: #1f77b4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0f5a8b;
+        }
+        pre { background: #f8f8f8; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 11px; max-height: 200px; overflow-y: auto; }
+        .success { color: #22c55e; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Complete Whisker Plot Test</h1>
+
+    <div class="test-container">
+        <h2>Test Controls:</h2>
+        <div class="controls">
+            <select id="variableSelect">
+                <option value="AV sml_l (cm)">AV sml_l (cm)</option>
+                <option value="AV lrg_l (cm)">AV lrg_l (cm)</option>
+                <option value="AV all_l (cm)" selected>AV all_l (cm)</option>
+            </select>
+            <button onclick="runWhiskerTest()">Generate Whisker Plot</button>
+            <button onclick="runBarTest()">Generate Bar Chart (No SD)</button>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <div class="chart-container">
+            <canvas id="testCanvas" width="800" height="500"></canvas>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>Console Output:</h2>
+        <pre id="consoleOutput"></pre>
+    </div>
+
+    <script>
+        // Capture console.log output
+        const originalLog = console.log;
+        let consoleOutput = '';
+        console.log = function(...args) {
+            const message = args.join(' ');
+            consoleOutput += message + '\n';
+            document.getElementById('consoleOutput').textContent = consoleOutput;
+            originalLog.apply(console, arguments);
+
+            // Auto-scroll console
+            const consoleEl = document.getElementById('consoleOutput');
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        };
+
+        // Mock the required functions (copied from our implementation)
+        function detectStandardDeviationColumn(averageColumn) {
+            console.log('🔍 Detecting SD column for:', averageColumn);
+            const sdColumn = averageColumn.replace(/^AV\s/, 'SD ');
+            console.log('🎯 Detected SD column:', sdColumn);
+            return sdColumn;
+        }
+
+        function validateSDColumn(rawData, sdColumn) {
+            if (!rawData || rawData.length === 0) {
+                console.log('❌ No data to validate SD column');
+                return false;
+            }
+
+            const firstRow = rawData[0];
+            const hasColumn = firstRow.hasOwnProperty(sdColumn);
+            console.log(`🔍 Validating SD column "${sdColumn}": ${hasColumn ? '✅ Found' : '❌ Not found'}`);
+
+            if (hasColumn) {
+                const validSDValues = rawData.filter(row => {
+                    const sdValue = parseFloat(row[sdColumn]);
+                    return !isNaN(sdValue) && sdValue >= 0;
+                }).length;
+
+                console.log(`📊 Valid SD values found: ${validSDValues}/${rawData.length}`);
+                return validSDValues > 0;
+            }
+
+            return false;
+        }
+
+        function aggregateLengthData(rawData, selectedVariable) {
+            console.log('=== AGGREGATING LENGTH DATA BY STATIONS (WITH SD SUPPORT) ===');
+            console.log('Raw data rows:', rawData.length);
+            console.log('Selected variable:', selectedVariable);
+
+            const sdColumn = detectStandardDeviationColumn(selectedVariable);
+            const hasValidSD = validateSDColumn(rawData, sdColumn);
+
+            console.log(`🔍 SD column detection: ${sdColumn} (Valid: ${hasValidSD})`);
+
+            const stationGroups = {};
+            const stationSDGroups = {};
+            const stationSet = new Set();
+
+            rawData.forEach(row => {
+                const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+                const avgValue = parseFloat(row[selectedVariable]);
+                const sdValue = hasValidSD ? parseFloat(row[sdColumn]) : null;
+
+                if (!sampleId || isNaN(avgValue) || avgValue <= 0) {
+                    return;
+                }
+
+                stationSet.add(sampleId);
+
+                if (!stationGroups[sampleId]) {
+                    stationGroups[sampleId] = [];
+                    stationSDGroups[sampleId] = [];
+                }
+
+                stationGroups[sampleId].push(avgValue);
+
+                if (hasValidSD && !isNaN(sdValue) && sdValue >= 0) {
+                    stationSDGroups[sampleId].push(sdValue);
+                }
+            });
+
+            const stations = Array.from(stationSet).sort((a, b) =>
+                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+            );
+
+            const result = stations.map(station => {
+                const avgValues = stationGroups[station];
+                const sdValues = stationSDGroups[station];
+
+                const avgLength = avgValues.reduce((sum, v) => sum + v, 0) / avgValues.length;
+                const maxLength = Math.max(...avgValues);
+                const minLength = Math.min(...avgValues);
+
+                let avgSD = null;
+                if (hasValidSD && sdValues.length > 0) {
+                    avgSD = sdValues.reduce((sum, v) => sum + v, 0) / sdValues.length;
+                    console.log(`📊 Station ${station}: Avg=${avgLength.toFixed(1)}, SD=${avgSD.toFixed(1)}`);
+                } else {
+                    console.log(`📊 Station ${station}: Avg=${avgLength.toFixed(1)}, SD=N/A`);
+                }
+
+                return {
+                    station: station,
+                    avgLength: avgLength,
+                    standardDeviation: avgSD,
+                    maxLength: maxLength,
+                    minLength: minLength,
+                    count: avgValues.length,
+                    variable: selectedVariable,
+                    sdColumn: sdColumn,
+                    hasSD: hasValidSD && avgSD !== null
+                };
+            });
+
+            console.log('🎯 Aggregated length data with SD support:', result);
+            return result;
+        }
+
+        function drawLengthDistributionChart(canvas, data, selectedVariable) {
+            console.log('🎨 Drawing whisker plot chart with data:', data);
+
+            const ctx = canvas.getContext('2d');
+            const padding = 80;
+            const chartWidth = canvas.width - 2 * padding;
+            const chartHeight = canvas.height - 2 * padding;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const hasSDData = data.some(d => d.hasSD);
+            const chartTitle = hasSDData
+                ? `${selectedVariable} by Station (with Error Bars)`
+                : `Average ${selectedVariable} by Station`;
+
+            console.log(`📊 Chart type: ${hasSDData ? 'Whisker Plot' : 'Regular Bar Chart'}`);
+
+            // Add chart title
+            ctx.fillStyle = '#555';
+            ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(chartTitle, padding, 50);
+
+            if (data.length === 0) {
+                ctx.fillStyle = '#666';
+                ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // Calculate max value for scaling
+            let maxDataValue = Math.max(...data.map(d => d.avgLength));
+
+            if (hasSDData) {
+                const maxWithErrorBars = Math.max(...data.map(d => {
+                    if (d.hasSD && d.standardDeviation !== null) {
+                        return d.avgLength + d.standardDeviation;
+                    }
+                    return d.avgLength;
+                }));
+                maxDataValue = maxWithErrorBars;
+                console.log('📏 Max value with error bars:', maxDataValue.toFixed(1));
+            }
+
+            const maxValue = maxDataValue * 1.15;
+            const yScale = chartHeight / maxValue;
+
+            const barWidth = chartWidth / data.length * 0.6;
+            const barSpacing = chartWidth / data.length * 0.4;
+
+            // Colors
+            const barColor = '#1f77b4';
+            const errorBarColor = '#0f5a8b';
+
+            // Draw gridlines
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 0.5;
+            ctx.setLineDash([2, 4]);
+
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (chartHeight * i / 5);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(padding + chartWidth, y);
+                ctx.stroke();
+            }
+
+            ctx.setLineDash([]);
+
+            // Draw data points
+            data.forEach((station, index) => {
+                const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+                const centerX = x + barWidth / 2;
+                const meanY = canvas.height - padding - (station.avgLength * yScale);
+
+                if (hasSDData && station.hasSD && station.standardDeviation !== null) {
+                    console.log(`📊 Drawing whisker for ${station.station}: mean=${station.avgLength.toFixed(1)}, sd=${station.standardDeviation.toFixed(1)}`);
+
+                    const sd = station.standardDeviation;
+                    const upperBound = Math.min(station.avgLength + sd, maxValue);
+                    const lowerBound = Math.max(station.avgLength - sd, 0);
+
+                    const upperY = canvas.height - padding - (upperBound * yScale);
+                    const lowerY = canvas.height - padding - (lowerBound * yScale);
+
+                    // Error bar
+                    ctx.strokeStyle = errorBarColor;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, upperY);
+                    ctx.lineTo(centerX, lowerY);
+                    ctx.stroke();
+
+                    // Caps
+                    const capWidth = barWidth * 0.4;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX - capWidth/2, upperY);
+                    ctx.lineTo(centerX + capWidth/2, upperY);
+                    ctx.moveTo(centerX - capWidth/2, lowerY);
+                    ctx.lineTo(centerX + capWidth/2, lowerY);
+                    ctx.stroke();
+
+                    // Mean bar
+                    const meanBarWidth = barWidth * 0.8;
+                    const meanBarHeight = Math.max(3, barWidth * 0.1);
+
+                    ctx.fillStyle = barColor;
+                    ctx.fillRect(
+                        centerX - meanBarWidth/2,
+                        meanY - meanBarHeight/2,
+                        meanBarWidth,
+                        meanBarHeight
+                    );
+
+                    // Label
+                    ctx.fillStyle = '#1f2937';
+                    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    ctx.textAlign = 'center';
+                    const labelText = `${station.avgLength.toFixed(1)}±${sd.toFixed(1)}`;
+                    ctx.fillText(labelText, centerX, upperY - 8);
+
+                } else {
+                    console.log(`📊 Drawing regular bar for ${station.station}: mean=${station.avgLength.toFixed(1)}`);
+
+                    const barHeight = station.avgLength * yScale;
+                    ctx.fillStyle = barColor;
+                    ctx.fillRect(x, canvas.height - padding - barHeight, barWidth, barHeight);
+
+                    ctx.fillStyle = '#1f2937';
+                    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(station.avgLength.toFixed(1), centerX, canvas.height - padding - barHeight - 5);
+                }
+
+                // Station label
+                ctx.save();
+                ctx.translate(centerX, canvas.height - padding + 15);
+                ctx.rotate(-Math.PI / 4);
+                ctx.fillStyle = '#374151';
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(station.station, 0, 0);
+                ctx.restore();
+            });
+
+            // Axes
+            ctx.strokeStyle = '#374151';
+            ctx.lineWidth = 1;
+
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, padding + chartHeight);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(padding, canvas.height - padding);
+            ctx.lineTo(padding + chartWidth, canvas.height - padding);
+            ctx.stroke();
+
+            // Y-axis labels
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'right';
+
+            for (let i = 0; i <= 5; i++) {
+                const value = (maxValue * i / 5).toFixed(1);
+                const y = canvas.height - padding - (chartHeight * i / 5);
+                ctx.fillText(value, padding - 10, y + 4);
+            }
+
+            // Y-axis title
+            ctx.save();
+            ctx.translate(25, canvas.height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = '#374151';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            const yAxisTitle = hasSDData ? 'Length (cm) with Error Bars' : 'Average Length (cm)';
+            ctx.fillText(yAxisTitle, 0, 0);
+            ctx.restore();
+
+            // Legend
+            if (hasSDData) {
+                drawWhiskerPlotLegend(ctx, canvas, padding);
+            }
+
+            console.log('✅ Whisker plot chart drawing complete');
+        }
+
+        function drawWhiskerPlotLegend(ctx, canvas, padding) {
+            const legendX = canvas.width - padding - 150;
+            const legendY = padding + 20;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.fillRect(legendX, legendY, 140, 60);
+            ctx.strokeRect(legendX, legendY, 140, 60);
+
+            ctx.fillStyle = '#374151';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Legend:', legendX + 10, legendY + 15);
+
+            ctx.fillStyle = '#1f77b4';
+            ctx.fillRect(legendX + 10, legendY + 22, 15, 3);
+            ctx.fillStyle = '#555';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillText('Mean', legendX + 30, legendY + 26);
+
+            ctx.strokeStyle = '#0f5a8b';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(legendX + 17, legendY + 32);
+            ctx.lineTo(legendX + 17, legendY + 42);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(legendX + 14, legendY + 32);
+            ctx.lineTo(legendX + 20, legendY + 32);
+            ctx.moveTo(legendX + 14, legendY + 42);
+            ctx.lineTo(legendX + 20, legendY + 42);
+            ctx.stroke();
+
+            ctx.fillStyle = '#555';
+            ctx.fillText('±1 Std Dev', legendX + 30, legendY + 40);
+        }
+
+        // Test data with SD values
+        const testDataWithSD = [
+            {
+                'sample ID': '1-NE-3',
+                'AV sml_l (cm)': 15.8,
+                'AV lrg_l (cm)': 45.7,
+                'AV all_l (cm)': 34.5,
+                'SD sml_l (cm)': 1.1,
+                'SD lrg_l (cm)': 3.0,
+                'SD all_l (cm)': 3.1
+            },
+            {
+                'sample ID': '4-SW-1',
+                'AV sml_l (cm)': 8.3,
+                'AV lrg_l (cm)': 58.0,
+                'AV all_l (cm)': 37.4,
+                'SD sml_l (cm)': 2.3,
+                'SD lrg_l (cm)': 15.5,
+                'SD all_l (cm)': 27.6
+            },
+            {
+                'sample ID': '4-NE-5',
+                'AV sml_l (cm)': 12.3,
+                'AV lrg_l (cm)': 61.3,
+                'AV all_l (cm)': 42.0,
+                'SD sml_l (cm)': 4.0,
+                'SD lrg_l (cm)': 25.9,
+                'SD all_l (cm)': 31.0
+            },
+            {
+                'sample ID': '4-SW-3',
+                'AV sml_l (cm)': 15.5,
+                'AV lrg_l (cm)': 53.2,
+                'AV all_l (cm)': 41.5,
+                'SD sml_l (cm)': 6.8,
+                'SD lrg_l (cm)': 16.1,
+                'SD all_l (cm)': 22.5
+            }
+        ];
+
+        // Test data without SD values
+        const testDataWithoutSD = [
+            {
+                'sample ID': '1-NE-3',
+                'AV sml_l (cm)': 15.8,
+                'AV lrg_l (cm)': 45.7,
+                'AV all_l (cm)': 34.5
+            },
+            {
+                'sample ID': '4-SW-1',
+                'AV sml_l (cm)': 8.3,
+                'AV lrg_l (cm)': 58.0,
+                'AV all_l (cm)': 37.4
+            }
+        ];
+
+        function runWhiskerTest() {
+            console.log('\n🚀 === RUNNING WHISKER PLOT TEST ===');
+            const selectedVariable = document.getElementById('variableSelect').value;
+            const canvas = document.getElementById('testCanvas');
+
+            console.log(`Selected variable: ${selectedVariable}`);
+
+            const aggregatedData = aggregateLengthData(testDataWithSD, selectedVariable);
+            drawLengthDistributionChart(canvas, aggregatedData, selectedVariable);
+
+            console.log('✅ Whisker plot test complete\n');
+        }
+
+        function runBarTest() {
+            console.log('\n🚀 === RUNNING BAR CHART TEST (NO SD) ===');
+            const selectedVariable = document.getElementById('variableSelect').value;
+            const canvas = document.getElementById('testCanvas');
+
+            console.log(`Selected variable: ${selectedVariable}`);
+
+            const aggregatedData = aggregateLengthData(testDataWithoutSD, selectedVariable);
+            drawLengthDistributionChart(canvas, aggregatedData, selectedVariable);
+
+            console.log('✅ Bar chart test complete\n');
+        }
+
+        // Run initial test
+        console.log('🧪 Whisker Plot Test Environment Ready');
+        setTimeout(() => runWhiskerTest(), 1000);
+    </script>
+</body>
+</html>

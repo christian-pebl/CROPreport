@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Blade Count Chart</title>
+</head>
+<body>
+    <h2>Test Chart Rendering</h2>
+    <div id="testOutput" style="border: 2px solid red; padding: 20px; min-height: 600px;">
+        Test output area
+    </div>
+
+    <script>
+        // Test data similar to what we're getting
+        const testData = [
+            { station: "1-NE-1", smallBlades: 10, largeBlades: 15, total: 25 },
+            { station: "1-NE-2", smallBlades: 8, largeBlades: 12, total: 20 },
+            { station: "1-NE-3", smallBlades: 15, largeBlades: 25, total: 40 },
+            { station: "1-SW-1", smallBlades: 12, largeBlades: 18, total: 30 },
+            { station: "1-SW-2", smallBlades: 6, largeBlades: 14, total: 20 },
+            { station: "1-SW-3", smallBlades: 16, largeBlades: 24, total: 40 }
+        ];
+
+        function renderTestChart() {
+            const outputDiv = document.getElementById('testOutput');
+
+            // Create canvas for chart
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 500;
+            canvas.style.border = '2px solid #000';
+            canvas.style.backgroundColor = '#ffffff';
+            canvas.style.display = 'block';
+            canvas.style.margin = '10px auto';
+
+            // Clear output and add canvas
+            outputDiv.innerHTML = '<h3>Blade Count Test Chart</h3>';
+            outputDiv.appendChild(canvas);
+
+            // Draw chart
+            const ctx = canvas.getContext('2d');
+            const padding = 60;
+            const chartWidth = canvas.width - 2 * padding;
+            const chartHeight = canvas.height - 2 * padding;
+
+            // Clear canvas with white background
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Calculate max value for scaling
+            const maxValue = Math.max(...testData.map(d => d.total));
+            const yScale = chartHeight / maxValue;
+            const barWidth = chartWidth / testData.length * 0.8;
+            const barSpacing = chartWidth / testData.length * 0.2;
+
+            console.log('Max value:', maxValue, 'Y scale:', yScale, 'Bar width:', barWidth);
+
+            // Colors
+            const smallColor = '#4CAF50';
+            const largeColor = '#2196F3';
+
+            // Draw bars
+            testData.forEach((station, index) => {
+                const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+                const smallHeight = station.smallBlades * yScale;
+                const largeHeight = station.largeBlades * yScale;
+
+                console.log(`Station ${station.station}: x=${x}, small=${smallHeight}, large=${largeHeight}`);
+
+                // Draw small blades (bottom)
+                ctx.fillStyle = smallColor;
+                ctx.fillRect(x, canvas.height - padding - smallHeight, barWidth, smallHeight);
+
+                // Draw large blades (top)
+                ctx.fillStyle = largeColor;
+                ctx.fillRect(x, canvas.height - padding - smallHeight - largeHeight, barWidth, largeHeight);
+
+                // Station label
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.station, x + barWidth / 2, canvas.height - padding + 20);
+            });
+
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, canvas.height - padding);
+            ctx.lineTo(canvas.width - padding, canvas.height - padding);
+            ctx.stroke();
+
+            // Title
+            ctx.fillStyle = '#333';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Test Blade Count Chart', canvas.width / 2, 30);
+        }
+
+        // Render the test chart immediately
+        window.onload = renderTestChart;
+    </script>
+</body>
+</html>

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CROPreport 0.1 - CSV Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="seaweed-manager.js" defer></script>
+</head>
+<body>
+    <!-- Working Directory Setup Modal -->
+    <div id="workingDirModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📄 Load Your CSV Files</h2>
+                <p>Select your CSV files to start analyzing your data. Files will load automatically without any confirmation dialogs.</p>
+            </div>
+            <div class="modal-body">
+                <div class="benefits">
+                    <p><strong>What you can do:</strong></p>
+                    <ul>
+                        <li>✅ Select multiple CSV files at once</li>
+                        <li>✅ Files load instantly with no confirmation popups</li>
+                        <li>✅ Immediately view tables and create plots</li>
+                        <li>✅ Switch between different file versions easily</li>
+                    </ul>
+                </div>
+                <div class="modal-actions">
+                    <button id="selectFilesBtn" class="btn-primary">📄 Select CSV Files</button>
+                    <button id="skipDirBtn" class="btn-secondary">Skip for now</button>
+                    <input type="file" id="csvFilesInput" accept=".csv" multiple hidden>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Banner Navigation -->
+    <nav class="top-banner">
+        <div class="banner-content">
+            <div class="banner-left">
+                <h1 class="banner-title">CROPreport 0.1</h1>
+            </div>
+            <div class="banner-right">
+                <div class="device-navigation">
+                    <div class="fpod-container">
+                        <div class="mode-slider-container">
+                            <div class="device-label">CROP</div>
+                            <div class="slider-track">
+                                <div class="slider-thumb"></div>
+                            </div>
+                            <div class="slider-icons">
+                                <button class="slider-icon" data-page="reformat" data-device="fpod" title="Load Data">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 3v12l-4-4m4 4l4-4"/>
+                                        <path d="M8 21h8"/>
+                                    </svg>
+                                </button>
+                                <button class="slider-icon" data-page="plot" data-device="fpod" title="Plot Data">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="22,6 13.5,15.5 8.5,10.5 2,17"/>
+                                        <polyline points="13,6 22,6 22,15"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="reformatPage" class="page-content">
+            <header>
+                <h1>Reformat</h1>
+                <p>Upload and visualize your CSV data</p>
+            </header>
+
+        <main>
+            <!-- Working Directory File Browser -->
+            <div class="file-browser hidden" id="fileBrowser">
+                <div class="file-browser-header">
+                    <h3>📁 Working Directory Files</h3>
+                    <div class="file-browser-controls">
+                        <span id="fileCount"></span>
+                        <div class="control-buttons">
+                            <button id="addFileBtn" class="btn-secondary">+ Add File</button>
+                            <button id="changeWorkingDirBtn" class="btn-secondary">Load Different Files</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="file-list" id="fileList">
+                    <!-- Files will be populated here -->
+                </div>
+            </div>
+
+            <div class="file-info-compact hidden" id="fileInfoCompact">
+                <button id="fileInfoToggle" class="info-toggle">ℹ️</button>
+                <div id="fileInfoDropdown" class="info-dropdown hidden">
+                    <h3>File Information</h3>
+                    <div id="fileDetails"></div>
+                </div>
+            </div>
+
+            <div class="plot-section hidden" id="plotSection">
+                <div class="plot-controls">
+                    <h3 id="plotTitle">Time Series Plot</h3>
+                    <div class="controls">
+                        <span id="plotInfo"></span>
+                        <div class="control-buttons">
+                            <button id="toggleTableBtn" class="btn-secondary">📄 Show Table</button>
+                            <button id="confirmSavePlotBtn" class="btn-primary hidden">✅ Confirm & Save</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="variable-controls hidden" id="variableControls">
+                    <h4>Select Variables to Plot:</h4>
+                    <div id="variableCheckboxes"></div>
+                </div>
+                <div class="plot-container">
+                    <canvas id="plotCanvas" width="800" height="400"></canvas>
+                </div>
+            </div>
+
+            <div class="table-section hidden" id="tableSection">
+                <div class="table-controls">
+                    <h3 id="dataTitle">CSV Data</h3>
+                    <div class="controls">
+                        <span id="recordCount"></span>
+                        <div class="control-buttons">
+                            <button id="toggleViewBtn" class="btn-secondary hidden">📊 Show Plot</button>
+                            <button id="confirmSaveBtn" class="btn-primary hidden">✅ Confirm & Save</button>
+                            <button id="exportBtn" class="btn-secondary">Export Current</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table id="csvTable">
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        </div> <!-- End reformatPage -->
+
+        <!-- Plot Page -->
+<!-- CROPREPORT Seaweed Visualization Section -->                <div class="seaweed-visualization-section hidden" id="seaweedSection">                    <div class="seaweed-header">                        <h2>🌊 Seaweed Morphology Analysis</h2>                    </div>                                        <div class="seaweed-controls">                        <div class="seaweed-control-group">                            <label>Data Import</label>                            <button class="seaweed-btn" id="importSeaweedData">📄 Load Seaweed Data</button>                            <input type="file" id="seaweedImageInput" accept="image/*,.csv" multiple hidden>                        </div>                                                <div class="seaweed-control-group">                            <label>Measurement Tools</label>                            <button class="seaweed-btn" id="measureLengthBtn">📏 Measure Length</button>                            <button class="seaweed-btn" id="measureAreaBtn">📐 Measure Area</button>                        </div>                                                <div class="seaweed-control-group">                            <label>Analysis</label>                            <button class="seaweed-btn" id="healthAssessBtn">💚 Health Assessment</button>                            <button class="seaweed-btn secondary" id="clearMeasurementsBtn">🗑️ Clear</button>                        </div>                                                <div class="seaweed-control-group">                            <label>Timeline</label>                            <button class="seaweed-btn" id="timelineViewBtn">⏱️ Growth Timeline</button>                        </div>                    </div>                                        <div class="morphology-viewer" id="morphologyViewer">                        <div class="morphology-canvas" id="morphologyCanvas">                            Click "Load Seaweed Data" to import images and measurements                        </div>                        <div class="measurement-overlay" id="measurementOverlay"></div>                    </div>                                        <div class="seaweed-stats" id="seaweedStats">                        <div class="stat-card">                            <div class="stat-value" id="lengthStat">--</div>                            <div class="stat-label">Average Length (cm)</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="areaStat">--</div>                            <div class="stat-label">Surface Area (cm²)</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="healthStat">--</div>                            <div class="stat-label">Health Score</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="growthStat">--</div>                            <div class="stat-label">Growth Rate (%/day)</div>                        </div>                    </div>                                        <div class="timeline-container hidden" id="timelineContainer">                        <h3>Growth Timeline</h3>                        <div class="timeline-controls">                            <label for="timelineSlider">Time Progress:</label>                            <input type="range" id="timelineSlider" class="timeline-slider" min="0" max="100" value="0">                            <div class="timeline-labels">                                <span>Day 0</span>                                <span id="currentTimeLabel">Day 0</span>                                <span id="maxTimeLabel">Day 30</span>                            </div>                        </div>                    </div>                </div>
+        <div id="plotPage" class="page-content">
+<!-- CROPREPORT Seaweed Visualization Section -->                <div class="seaweed-visualization-section hidden" id="seaweedSection">                    <div class="seaweed-header">                        <h2>🌊 Seaweed Morphology Analysis</h2>                    </div>                                        <div class="seaweed-controls">                        <div class="seaweed-control-group">                            <label>Data Import</label>                            <button class="seaweed-btn" id="importSeaweedData">📄 Load Seaweed Data</button>                            <input type="file" id="seaweedImageInput" accept="image/*,.csv" multiple hidden>                        </div>                                                <div class="seaweed-control-group">                            <label>Measurement Tools</label>                            <button class="seaweed-btn" id="measureLengthBtn">📏 Measure Length</button>                            <button class="seaweed-btn" id="measureAreaBtn">📐 Measure Area</button>                        </div>                                                <div class="seaweed-control-group">                            <label>Analysis</label>                            <button class="seaweed-btn" id="healthAssessBtn">💚 Health Assessment</button>                            <button class="seaweed-btn secondary" id="clearMeasurementsBtn">🗑️ Clear</button>                        </div>                                                <div class="seaweed-control-group">                            <label>Timeline</label>                            <button class="seaweed-btn" id="timelineViewBtn">⏱️ Growth Timeline</button>                        </div>                    </div>                                        <div class="morphology-viewer" id="morphologyViewer">                        <div class="morphology-canvas" id="morphologyCanvas">                            Click "Load Seaweed Data" to import images and measurements                        </div>                        <div class="measurement-overlay" id="measurementOverlay"></div>                    </div>                                        <div class="seaweed-stats" id="seaweedStats">                        <div class="stat-card">                            <div class="stat-value" id="lengthStat">--</div>                            <div class="stat-label">Average Length (cm)</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="areaStat">--</div>                            <div class="stat-label">Surface Area (cm²)</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="healthStat">--</div>                            <div class="stat-label">Health Score</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="growthStat">--</div>                            <div class="stat-label">Growth Rate (%/day)</div>                        </div>                    </div>                                        <div class="timeline-container hidden" id="timelineContainer">                        <h3>Growth Timeline</h3>                        <div class="timeline-controls">                            <label for="timelineSlider">Time Progress:</label>                            <input type="range" id="timelineSlider" class="timeline-slider" min="0" max="100" value="0">                            <div class="timeline-labels">                                <span>Day 0</span>                                <span id="currentTimeLabel">Day 0</span>                                <span id="maxTimeLabel">Day 30</span>                            </div>                        </div>                    </div>                </div>
+            
+<!-- CROPREPORT Seaweed Visualization Section -->                <div class="seaweed-visualization-section hidden" id="seaweedSection">                    <div class="seaweed-header">                        <h2>🌊 Seaweed Morphology Analysis</h2>                    </div>                                        <div class="seaweed-controls">                        <div class="seaweed-control-group">                            <label>Data Import</label>                            <button class="seaweed-btn" id="importSeaweedData">📄 Load Seaweed Data</button>                            <input type="file" id="seaweedImageInput" accept="image/*,.csv" multiple hidden>                        </div>                                                <div class="seaweed-control-group">                            <label>Measurement Tools</label>                            <button class="seaweed-btn" id="measureLengthBtn">📏 Measure Length</button>                            <button class="seaweed-btn" id="measureAreaBtn">📐 Measure Area</button>                        </div>                                                <div class="seaweed-control-group">                            <label>Analysis</label>                            <button class="seaweed-btn" id="healthAssessBtn">💚 Health Assessment</button>                            <button class="seaweed-btn secondary" id="clearMeasurementsBtn">🗑️ Clear</button>                        </div>                                                <div class="seaweed-control-group">                            <label>Timeline</label>                            <button class="seaweed-btn" id="timelineViewBtn">⏱️ Growth Timeline</button>                        </div>                    </div>                                        <div class="morphology-viewer" id="morphologyViewer">                        <div class="morphology-canvas" id="morphologyCanvas">                            Click "Load Seaweed Data" to import images and measurements                        </div>                        <div class="measurement-overlay" id="measurementOverlay"></div>                    </div>                                        <div class="seaweed-stats" id="seaweedStats">                        <div class="stat-card">                            <div class="stat-value" id="lengthStat">--</div>                            <div class="stat-label">Average Length (cm)</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="areaStat">--</div>                            <div class="stat-label">Surface Area (cm²)</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="healthStat">--</div>                            <div class="stat-label">Health Score</div>                        </div>                        <div class="stat-card">                            <div class="stat-value" id="growthStat">--</div>                            <div class="stat-label">Growth Rate (%/day)</div>                        </div>                    </div>                                        <div class="timeline-container hidden" id="timelineContainer">                        <h3>Growth Timeline</h3>                        <div class="timeline-controls">                            <label for="timelineSlider">Time Progress:</label>                            <input type="range" id="timelineSlider" class="timeline-slider" min="0" max="100" value="0">                            <div class="timeline-labels">                                <span>Day 0</span>                                <span id="currentTimeLabel">Day 0</span>                                <span id="maxTimeLabel">Day 30</span>                            </div>                        </div>                    </div>                </div>
+            <main>
+                <!-- Blade Count Analysis Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Blade Count Analysis</h2>
+                    </div>
+
+                    <div class="comparison-container">
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>Blade Count by Size Distribution</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="dataSourceSelect">Data Source:</label>
+                                        <select id="dataSourceSelect" class="form-control">
+                                            <option value="">Select data source...</option>
+                                        </select>
+                                        <small class="help-text">Choose data source for analysis</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="parameterSelect">Parameter:</label>
+                                        <select id="parameterSelect" class="form-control" disabled>
+                                            <option value="">Select parameter...</option>
+                                            <option value="blade_count_by_size">Blade count by size (small vs large)</option>
+                                        </select>
+                                        <small class="help-text" id="parameterHelpText">Select data source first</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateBladeCountBtn" class="btn-primary" disabled>
+                                        Generate Blade Count Chart
+                                    </button>
+                                </div>
+                                <div id="bladeCountOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Distribution of lengths Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Distribution of lengths</h2>
+                    </div>
+
+                    <div class="comparison-container">
+                        <!-- Compare sites for specified length variable -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>1. Length distribution constant file, comparing variables</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="sitesSelectLength1">Select File:</label>
+                                        <select id="sitesSelectLength1" class="form-control">
+                                            <option value="">Select a CSV file...</option>
+                                        </select>
+                                        <small class="help-text">Choose one CSV file to analyze</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lengthSelect1">Select Length Variables:</label>
+                                        <select id="lengthSelect1" class="form-control" multiple>
+                                            <option value="AV sml_l (cm)">AV sml_l (cm)</option>
+                                            <option value="AV lrg_l (cm)">AV lrg_l (cm)</option>
+                                            <option value="AV all_l (cm)">AV all_l (cm)</option>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple length variables</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateSiteComparisonLengthBtn" class="btn-primary" disabled>
+                                        Generate Variable Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="siteComparisonLengthOutput" class="output-area"></div>
+                            </div>
+                        </div>
+
+                        <!-- Compare length variables for specified site -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>2. Length distribution constant site, comparing variables</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="siteSelectLength2">Select File:</label>
+                                        <select id="siteSelectLength2" class="form-control">
+                                            <option value="">Select a CSV file...</option>
+                                        </select>
+                                        <small class="help-text">Choose one CSV file to analyze</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lengthVarsSelect2">Select Length Variables:</label>
+                                        <select id="lengthVarsSelect2" class="form-control" multiple>
+                                            <option value="AV sml_l (cm)">AV sml_l (cm)</option>
+                                            <option value="AV lrg_l (cm)">AV lrg_l (cm)</option>
+                                            <option value="AV all_l (cm)">AV all_l (cm)</option>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple length variables</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateVariableComparisonLengthBtn" class="btn-primary" disabled>
+                                        Generate Variable Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="variableComparisonLengthOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 24 Hour Average DPM Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>24 Hour Average DPM</h2>
+                    </div>
+                    
+                    <div class="comparison-container">
+                        <!-- Compare sites for specified source -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>1. 24hr constant source, comparing sites</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="sourceSelect1">Select DPM Column:</label>
+                                        <select id="sourceSelect1" class="form-control">
+                                            <option value="">Select DPM column to plot...</option>
+                                        </select>
+                                        <small class="help-text">Choose Porpoise (DPM), Dolphin (DPM), or Sonar (DPM)</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sitesSelect1">Select _24hr.csv Files:</label>
+                                        <select id="sitesSelect1" class="form-control" multiple>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple _24hr.csv files</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateSiteComparisonBtn" class="btn-primary" disabled>
+                                        Generate Site Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="siteComparisonOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Compare sources for specified site -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>2. 24hr constant site, comparing sources</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="siteSelect2">Select _24hr.csv File:</label>
+                                        <select id="siteSelect2" class="form-control">
+                                            <option value="">Select a _24hr.csv file...</option>
+                                        </select>
+                                        <small class="help-text">Choose one _24hr.csv file to analyze</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sourcesSelect2">Select DPM Columns:</label>
+                                        <select id="sourcesSelect2" class="form-control" multiple>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple DPM columns</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateSourceComparisonBtn" class="btn-primary" disabled>
+                                        Generate Source Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="sourceComparisonOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+
+                <!-- Standard DPM Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Standard DPM Analysis</h2>
+                    </div>
+                    
+                    <div class="comparison-container">
+                        <!-- Compare sites for specified source -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>1. Standard constant source, comparing sites</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="sourceSelectStd1">Select DPM Column:</label>
+                                        <select id="sourceSelectStd1" class="form-control">
+                                            <option value="">Select DPM column to plot...</option>
+                                        </select>
+                                        <small class="help-text">Choose Porpoise (DPM), Dolphin (DPM), or Sonar (DPM)</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sitesSelectStd1">Select _std.csv Files:</label>
+                                        <select id="sitesSelectStd1" class="form-control" multiple>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple _std.csv files</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateSiteComparisonStdBtn" class="btn-primary" disabled>
+                                        Generate Site Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="siteComparisonStdOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Compare sources for specified site -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>2. Standard constant site, comparing sources</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="siteSelectStd2">Select _std.csv File:</label>
+                                        <select id="siteSelectStd2" class="form-control">
+                                            <option value="">Select a _std.csv file...</option>
+                                        </select>
+                                        <small class="help-text">Choose one _std.csv file to analyze</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sourcesSelectStd2">Select DPM Columns:</label>
+                                        <select id="sourcesSelectStd2" class="form-control" multiple>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple DPM columns</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateSourceComparisonStdBtn" class="btn-primary" disabled>
+                                        Generate Source Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="sourceComparisonStdOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div> <!-- End plotPage -->
+
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

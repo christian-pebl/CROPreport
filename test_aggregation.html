@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggregation Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success { color: #22c55e; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+        pre { background: #f8f8f8; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Data Aggregation Test (with SD)</h1>
+
+    <div class="test-container">
+        <h2>Test Data (CSV Structure):</h2>
+        <pre id="testData">Loading...</pre>
+    </div>
+
+    <div class="test-container">
+        <h2>Aggregation Results:</h2>
+        <div id="aggregationResults">Running tests...</div>
+    </div>
+
+    <div class="test-container">
+        <h2>Console Output:</h2>
+        <pre id="consoleOutput"></pre>
+    </div>
+
+    <script>
+        // Capture console.log output
+        const originalLog = console.log;
+        let consoleOutput = '';
+        console.log = function(...args) {
+            const message = args.join(' ');
+            consoleOutput += message + '\n';
+            document.getElementById('consoleOutput').textContent = consoleOutput;
+            originalLog.apply(console, arguments);
+        };
+
+        // Mock the required functions
+        function detectStandardDeviationColumn(averageColumn) {
+            console.log('🔍 Detecting SD column for:', averageColumn);
+            const sdColumn = averageColumn.replace(/^AV\s/, 'SD ');
+            console.log('🎯 Detected SD column:', sdColumn);
+            return sdColumn;
+        }
+
+        function validateSDColumn(rawData, sdColumn) {
+            if (!rawData || rawData.length === 0) {
+                console.log('❌ No data to validate SD column');
+                return false;
+            }
+
+            const firstRow = rawData[0];
+            const hasColumn = firstRow.hasOwnProperty(sdColumn);
+
+            console.log(`🔍 Validating SD column "${sdColumn}": ${hasColumn ? '✅ Found' : '❌ Not found'}`);
+
+            if (hasColumn) {
+                const validSDValues = rawData.filter(row => {
+                    const sdValue = parseFloat(row[sdColumn]);
+                    return !isNaN(sdValue) && sdValue >= 0;
+                }).length;
+
+                console.log(`📊 Valid SD values found: ${validSDValues}/${rawData.length}`);
+                return validSDValues > 0;
+            }
+
+            return false;
+        }
+
+        function aggregateLengthData(rawData, selectedVariable) {
+            console.log('=== AGGREGATING LENGTH DATA BY STATIONS (WITH SD SUPPORT) ===');
+            console.log('Raw data rows:', rawData.length);
+            console.log('Selected variable:', selectedVariable);
+
+            // Detect corresponding SD column
+            const sdColumn = detectStandardDeviationColumn(selectedVariable);
+            const hasValidSD = validateSDColumn(rawData, sdColumn);
+
+            console.log(`🔍 SD column detection: ${sdColumn} (Valid: ${hasValidSD})`);
+
+            const stationGroups = {};
+            const stationSDGroups = {};
+            const stationSet = new Set();
+
+            // Group data by station and collect values for both AV and SD
+            rawData.forEach(row => {
+                const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+                const avgValue = parseFloat(row[selectedVariable]);
+                const sdValue = hasValidSD ? parseFloat(row[sdColumn]) : null;
+
+                if (!sampleId || isNaN(avgValue) || avgValue <= 0) {
+                    return; // Skip invalid rows
+                }
+
+                stationSet.add(sampleId);
+
+                if (!stationGroups[sampleId]) {
+                    stationGroups[sampleId] = [];
+                    stationSDGroups[sampleId] = [];
+                }
+
+                stationGroups[sampleId].push(avgValue);
+
+                // Store SD values if available and valid
+                if (hasValidSD && !isNaN(sdValue) && sdValue >= 0) {
+                    stationSDGroups[sampleId].push(sdValue);
+                }
+            });
+
+            // Calculate statistics for each station
+            const stations = Array.from(stationSet).sort((a, b) =>
+                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+            );
+
+            const result = stations.map(station => {
+                const avgValues = stationGroups[station];
+                const sdValues = stationSDGroups[station];
+
+                // Calculate average of the average values
+                const avgLength = avgValues.reduce((sum, v) => sum + v, 0) / avgValues.length;
+                const maxLength = Math.max(...avgValues);
+                const minLength = Math.min(...avgValues);
+
+                // Calculate average SD if available
+                let avgSD = null;
+                if (hasValidSD && sdValues.length > 0) {
+                    avgSD = sdValues.reduce((sum, v) => sum + v, 0) / sdValues.length;
+                    console.log(`📊 Station ${station}: Avg=${avgLength.toFixed(1)}, SD=${avgSD.toFixed(1)}`);
+                } else {
+                    console.log(`📊 Station ${station}: Avg=${avgLength.toFixed(1)}, SD=N/A`);
+                }
+
+                return {
+                    station: station,
+                    avgLength: avgLength,
+                    standardDeviation: avgSD,
+                    maxLength: maxLength,
+                    minLength: minLength,
+                    count: avgValues.length,
+                    variable: selectedVariable,
+                    sdColumn: sdColumn,
+                    hasSD: hasValidSD && avgSD !== null
+                };
+            });
+
+            console.log('🎯 Aggregated length data with SD support:', result);
+            return result;
+        }
+
+        // Sample data matching the real CSV structure
+        const testData = [
+            {
+                'Date': '25/03/25',
+                'sample ID': '1-NE-3',
+                'AV sml_l (cm)': 15.8,
+                'AV lrg_l (cm)': 45.7,
+                'AV all_l (cm)': 34.5,
+                'SD sml_l (cm)': 1.1,
+                'SD lrg_l (cm)': 3.0,
+                'SD all_l (cm)': 3.1
+            },
+            {
+                'Date': '25/03/25',
+                'sample ID': '4-SW-1',
+                'AV sml_l (cm)': 8.3,
+                'AV lrg_l (cm)': 58.0,
+                'AV all_l (cm)': 37.4,
+                'SD sml_l (cm)': 2.3,
+                'SD lrg_l (cm)': 15.5,
+                'SD all_l (cm)': 27.6
+            },
+            {
+                'Date': '25/03/25',
+                'sample ID': '4-NE-5',
+                'AV sml_l (cm)': 12.3,
+                'AV lrg_l (cm)': 61.3,
+                'AV all_l (cm)': 42.0,
+                'SD sml_l (cm)': 4.0,
+                'SD lrg_l (cm)': 25.9,
+                'SD all_l (cm)': 31.0
+            }
+        ];
+
+        // Display test data
+        document.getElementById('testData').textContent = JSON.stringify(testData, null, 2);
+
+        // Run tests
+        function runAggregationTests() {
+            const testVariables = [
+                'AV sml_l (cm)',
+                'AV lrg_l (cm)',
+                'AV all_l (cm)'
+            ];
+
+            let resultsHTML = '';
+
+            testVariables.forEach(variable => {
+                console.log(`\n=== Testing Aggregation for: ${variable} ===`);
+
+                const aggregatedData = aggregateLengthData(testData, variable);
+
+                resultsHTML += `<h3>Results for ${variable}:</h3>`;
+                resultsHTML += '<table>';
+                resultsHTML += '<tr><th>Station</th><th>Avg Length</th><th>Std Dev</th><th>Has SD</th><th>Min/Max</th></tr>';
+
+                aggregatedData.forEach(station => {
+                    const sdDisplay = station.standardDeviation !== null
+                        ? station.standardDeviation.toFixed(2)
+                        : 'N/A';
+                    const hasSDIcon = station.hasSD ? '✅' : '❌';
+                    const range = `${station.minLength.toFixed(1)} / ${station.maxLength.toFixed(1)}`;
+
+                    resultsHTML += `<tr>
+                        <td>${station.station}</td>
+                        <td>${station.avgLength.toFixed(2)}</td>
+                        <td>${sdDisplay}</td>
+                        <td>${hasSDIcon}</td>
+                        <td>${range}</td>
+                    </tr>`;
+                });
+
+                resultsHTML += '</table>';
+            });
+
+            document.getElementById('aggregationResults').innerHTML = resultsHTML;
+            console.log('\n🎉 Aggregation Tests Complete!');
+        }
+
+        // Run tests when page loads
+        setTimeout(runAggregationTests, 500);
+    </script>
+</body>
+</html>
