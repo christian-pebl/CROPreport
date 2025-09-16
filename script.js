@@ -6257,34 +6257,81 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return this.parseCSVFile(lengthFile);
     }
 
+    aggregateLengthData(rawData, selectedVariable) {
+        console.log('=== AGGREGATING LENGTH DATA BY STATIONS ===');
+        console.log('Raw data rows:', rawData.length);
+        console.log('Selected variable:', selectedVariable);
+
+        const stationGroups = {};
+        const stationSet = new Set();
+
+        // Group data by station and collect values for the selected variable
+        rawData.forEach(row => {
+            const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const value = parseFloat(row[selectedVariable]);
+
+            if (!sampleId || isNaN(value) || value <= 0) {
+                return; // Skip invalid rows
+            }
+
+            stationSet.add(sampleId);
+
+            if (!stationGroups[sampleId]) {
+                stationGroups[sampleId] = [];
+            }
+            stationGroups[sampleId].push(value);
+        });
+
+        // Calculate statistics for each station
+        const stations = Array.from(stationSet).sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+        );
+
+        const result = stations.map(station => {
+            const values = stationGroups[station];
+            const avgLength = values.reduce((sum, v) => sum + v, 0) / values.length;
+            const maxLength = Math.max(...values);
+            const minLength = Math.min(...values);
+
+            return {
+                station: station,
+                avgLength: avgLength,
+                maxLength: maxLength,
+                minLength: minLength,
+                count: values.length,
+                variable: selectedVariable
+            };
+        });
+
+        console.log('Aggregated length data by stations:', result);
+        return result;
+    }
+
     renderLengthDistributionChart(rawData, lengthVars, outputDiv) {
         console.log('=== RENDERING LENGTH DISTRIBUTION CHART ===');
         console.log('Raw data rows:', rawData.length);
         console.log('Length variables:', lengthVars);
 
-        // Extract length data for the selected variables
-        const lengthData = rawData.map(row => {
-            const result = {
-                date: row['Date'],
-                sampleID: row['sample ID'],
-                subset: row['subset']
-            };
+        // For now, we'll work with the first selected variable (like blade count works with one parameter)
+        const selectedVariable = lengthVars[0];
+        if (!selectedVariable) {
+            outputDiv.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Variable Selected</h4>
+                    <p>Please select a length variable to analyze.</p>
+                </div>
+            `;
+            return;
+        }
 
-            lengthVars.forEach(variable => {
-                const value = parseFloat(row[variable]);
-                result[variable] = isNaN(value) ? 0 : value;
-            });
+        // Aggregate data by stations using our new method
+        const aggregatedData = this.aggregateLengthData(rawData, selectedVariable);
 
-            return result;
-        }).filter(row => row.date && row.sampleID); // Filter out rows with missing essential data
-
-        console.log('Processed length data rows:', lengthData.length);
-
-        if (lengthData.length === 0) {
+        if (aggregatedData.length === 0) {
             outputDiv.innerHTML = `
                 <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
                     <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Data</h4>
-                    <p>No valid length data found for the selected variables.</p>
+                    <p>No valid length data found for variable: ${selectedVariable}</p>
                 </div>
             `;
             return;
@@ -6299,50 +6346,98 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         canvas.height = 500;
         chartContainer.appendChild(canvas);
 
-        // Render the chart
-        this.drawLengthDistributionChart(canvas, lengthData, lengthVars);
+        // Render the chart with station-based data
+        this.drawLengthDistributionChart(canvas, aggregatedData, selectedVariable);
 
         // Clear loading message and add chart directly
         outputDiv.innerHTML = '';
         outputDiv.appendChild(chartContainer);
 
-        // Add summary table
-        this.addLengthSummaryTable(lengthData, lengthVars, outputDiv);
+        // Add summary table with station data
+        this.addLengthSummaryTable(aggregatedData, selectedVariable, outputDiv);
     }
 
-    drawLengthDistributionChart(canvas, data, lengthVars) {
+    drawLengthDistributionChart(canvas, data, selectedVariable) {
         const ctx = canvas.getContext('2d');
         const padding = 80;
         const chartWidth = canvas.width - 2 * padding;
         const chartHeight = canvas.height - 2 * padding;
 
-        // Clear canvas with light background
-        ctx.fillStyle = '#f8fafc';
+        // Clear canvas with white background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Calculate statistics for each variable
-        const stats = lengthVars.map((variable, index) => {
-            const values = data.map(d => d[variable]).filter(v => v > 0);
-            const avg = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
-            const max = Math.max(...values, 0);
-            const min = Math.min(...values, 0);
+        // Add chart title
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Average ${selectedVariable} by Station`, padding, 50);
 
-            return {
-                variable,
-                values,
-                avg,
-                max,
-                min,
-                count: values.length,
-                color: this.getLengthVariableColor(index)
-            };
+        if (data.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        // Calculate max value for scaling with 10% buffer
+        const maxDataValue = Math.max(...data.map(d => d.avgLength));
+        const maxValue = maxDataValue * 1.1;  // Add 10% buffer
+        const yScale = chartHeight / maxValue;
+
+        const barWidth = chartWidth / data.length * 0.7;
+        const barSpacing = chartWidth / data.length * 0.3;
+
+        // Use a blue color scheme for length data
+        const barColor = '#1f77b4';
+
+        // Draw gridlines first (behind bars)
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 4]);
+
+        // Draw horizontal gridlines
+        for (let i = 0; i <= 5; i++) {
+            const y = padding + (chartHeight * i / 5);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(padding + chartWidth, y);
+            ctx.stroke();
+        }
+
+        // Reset to solid lines for axes and bars
+        ctx.setLineDash([]);
+
+        // Draw bars for each station
+        data.forEach((station, index) => {
+            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+            const barHeight = station.avgLength * yScale;
+
+            // Draw the bar
+            ctx.fillStyle = barColor;
+            ctx.fillRect(x, canvas.height - padding - barHeight, barWidth, barHeight);
+
+            // Station label (rotated for better fit)
+            ctx.save();
+            ctx.translate(x + barWidth / 2, canvas.height - padding + 15);
+            ctx.rotate(-Math.PI / 4); // 45 degree rotation
+            ctx.fillStyle = '#374151';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(station.station, 0, 0);
+            ctx.restore();
+
+            // Value on top of bar
+            ctx.fillStyle = '#1f2937';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(station.avgLength.toFixed(1), x + barWidth / 2, canvas.height - padding - barHeight - 5);
         });
 
-        // Find overall max for y-axis scaling
-        const overallMax = Math.max(...stats.map(s => s.max), 1);
-
-        // Draw axes
-        ctx.strokeStyle = '#e2e8f0';
+        // Draw axes (on top of gridlines)
+        ctx.strokeStyle = '#374151';
         ctx.lineWidth = 1;
 
         // Y-axis
@@ -6353,34 +6448,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // X-axis
         ctx.beginPath();
-        ctx.moveTo(padding, padding + chartHeight);
-        ctx.lineTo(padding + chartWidth, padding + chartHeight);
+        ctx.moveTo(padding, canvas.height - padding);
+        ctx.lineTo(padding + chartWidth, canvas.height - padding);
         ctx.stroke();
-
-        // Draw bars for each variable
-        const barWidth = chartWidth / (lengthVars.length * 1.5);
-        const barSpacing = barWidth * 0.3;
-
-        stats.forEach((stat, index) => {
-            const x = padding + (index * (barWidth + barSpacing)) + barSpacing/2;
-            const barHeight = (stat.avg / overallMax) * chartHeight;
-            const y = padding + chartHeight - barHeight;
-
-            // Draw bar
-            ctx.fillStyle = stat.color;
-            ctx.fillRect(x, y, barWidth, barHeight);
-
-            // Draw variable label
-            ctx.fillStyle = '#374151';
-            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(stat.variable.replace('AV ', '').replace(' (cm)', ''), x + barWidth/2, padding + chartHeight + 25);
-
-            // Draw value on top of bar
-            ctx.fillStyle = '#1f2937';
-            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.fillText(stat.avg.toFixed(1), x + barWidth/2, y - 5);
-        });
 
         // Y-axis labels
         ctx.fillStyle = '#6b7280';
@@ -6388,16 +6458,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.textAlign = 'right';
 
         for (let i = 0; i <= 5; i++) {
-            const value = (overallMax * i / 5).toFixed(1);
-            const y = padding + chartHeight - (chartHeight * i / 5);
+            const value = (maxValue * i / 5).toFixed(1);
+            const y = canvas.height - padding - (chartHeight * i / 5);
             ctx.fillText(value, padding - 10, y + 4);
         }
-
-        // Chart title
-        ctx.fillStyle = '#1f2937';
-        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Average Length Distribution', canvas.width / 2, 30);
 
         // Y-axis title
         ctx.save();
@@ -6406,7 +6470,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#374151';
         ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Length (cm)', 0, 0);
+        ctx.fillText('Average Length (cm)', 0, 0);
         ctx.restore();
     }
 
@@ -6422,12 +6486,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return colors[index % colors.length];
     }
 
-    addLengthSummaryTable(data, lengthVars, outputDiv) {
+    addLengthSummaryTable(data, selectedVariable, outputDiv) {
         const tableContainer = document.createElement('div');
         tableContainer.style.marginTop = '20px';
 
         const tableTitle = document.createElement('h4');
-        tableTitle.textContent = 'Length Statistics Summary';
+        tableTitle.textContent = `${selectedVariable} Summary by Station`;
         tableTitle.style.marginBottom = '10px';
         tableTitle.style.color = '#374151';
         tableContainer.appendChild(tableTitle);
@@ -6441,7 +6505,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const thead = document.createElement('thead');
         thead.style.backgroundColor = '#f8fafc';
         const headerRow = document.createElement('tr');
-        ['Variable', 'Average (cm)', 'Min (cm)', 'Max (cm)', 'Count'].forEach(text => {
+        ['Station', 'Average (cm)', 'Min (cm)', 'Max (cm)', 'Count'].forEach(text => {
             const th = document.createElement('th');
             th.textContent = text;
             th.style.border = '1px solid #e5e7eb';
@@ -6456,15 +6520,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Body
         const tbody = document.createElement('tbody');
-        lengthVars.forEach(variable => {
-            const values = data.map(d => d[variable]).filter(v => v > 0);
-            const avg = values.length > 0 ? (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(2) : 'N/A';
-            const min = values.length > 0 ? Math.min(...values).toFixed(2) : 'N/A';
-            const max = values.length > 0 ? Math.max(...values).toFixed(2) : 'N/A';
-            const count = values.length;
-
+        data.forEach(station => {
             const row = document.createElement('tr');
-            [variable, avg, min, max, count].forEach(value => {
+            [station.station, station.avgLength.toFixed(2), station.minLength.toFixed(2), station.maxLength.toFixed(2), station.count].forEach(value => {
                 const td = document.createElement('td');
                 td.textContent = value;
                 td.style.border = '1px solid #e5e7eb';
