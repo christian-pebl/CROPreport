@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Box Plot Test with Individual Data</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        select, button {
+            margin: 5px;
+            padding: 8px 12px;
+            font-family: inherit;
+        }
+        button {
+            background: #1f77b4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0f5a8b;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 11px;
+        }
+        .stats-table th, .stats-table td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: center;
+        }
+        .stats-table th {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 True Box Plot Test with Real Individual Data</h1>
+
+    <div class="test-container">
+        <h2>Test Controls:</h2>
+        <div class="controls">
+            <select id="variableSelect">
+                <option value="AV sml_l (cm)">AV sml_l (cm) → Small Length</option>
+                <option value="AV lrg_l (cm)">AV lrg_l (cm) → Large Length</option>
+                <option value="AV all_l (cm)" selected>AV all_l (cm) → All Length</option>
+                <option value="AV sml_w (cm)">AV sml_w (cm) → Small Width</option>
+                <option value="AV lrg_w (cm)">AV lrg_w (cm) → Large Width</option>
+                <option value="AV all_w (cm)">AV all_w (cm) → All Width</option>
+            </select>
+            <button onclick="runBoxPlotTest()">Generate True Box Plot</button>
+            <button onclick="runLegacyTest()">Generate Legacy Chart</button>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <div class="chart-container">
+            <canvas id="testCanvas" width="900" height="600"></canvas>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>Statistics Summary:</h2>
+        <div id="statsDisplay">Click "Generate True Box Plot" to see statistics</div>
+    </div>
+
+    <div class="test-container">
+        <h2>Console Output:</h2>
+        <pre id="consoleOutput"></pre>
+    </div>
+
+    <script>
+        // Capture console.log output
+        const originalLog = console.log;
+        let consoleOutput = '';
+        console.log = function(...args) {
+            const message = args.join(' ');
+            consoleOutput += message + '\n';
+            document.getElementById('consoleOutput').textContent = consoleOutput;
+            originalLog.apply(console, arguments);
+
+            // Auto-scroll console
+            const consoleEl = document.getElementById('consoleOutput');
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        };
+
+        // Sample individual blade data mimicking the real CSV structure
+        const realIndividualData = [
+            // Station 1-NE-3 - Summary row first
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': '', 'blade ID': '', 'length (cm)': '', 'width (cm)': '', 'AV all_l (cm)': 34.5, 'SD all_l (cm)': 3.1 },
+            // Individual measurements for 1-NE-3
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '1', 'length (cm)': 16.25, 'width (cm)': 1.61 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '2', 'length (cm)': 16.86, 'width (cm)': 2.91 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '3', 'length (cm)': 20.37, 'width (cm)': 3.71 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '4', 'length (cm)': 19.67, 'width (cm)': 3.41 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '5', 'length (cm)': 18.16, 'width (cm)': 2.31 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '6', 'length (cm)': 14.55, 'width (cm)': 2.51 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'small', 'blade ID': '7', 'length (cm)': 17.86, 'width (cm)': 3.61 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'large', 'blade ID': '1', 'length (cm)': 58.49, 'width (cm)': 5.52 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'large', 'blade ID': '2', 'length (cm)': 40.64, 'width (cm)': 5.42 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'large', 'blade ID': '3', 'length (cm)': 35.32, 'width (cm)': 3.11 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'large', 'blade ID': '4', 'length (cm)': 72.44, 'width (cm)': 6.62 }, // Potential outlier
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'large', 'blade ID': '5', 'length (cm)': 34.01, 'width (cm)': 3.31 },
+            { 'Date': '25/03/25', 'sample ID': '1-NE-3', 'subset': 'large', 'blade ID': '6', 'length (cm)': 53.48, 'width (cm)': 1.3 },
+
+            // Station 4-SW-1 - Summary row
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': '', 'blade ID': '', 'length (cm)': '', 'width (cm)': '', 'AV all_l (cm)': 37.4, 'SD all_l (cm)': 27.6 },
+            // Individual measurements for 4-SW-1
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'small', 'blade ID': '1', 'length (cm)': 8.3, 'width (cm)': 1.9 },
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'small', 'blade ID': '2', 'length (cm)': 9.1, 'width (cm)': 2.1 },
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'small', 'blade ID': '3', 'length (cm)': 7.8, 'width (cm)': 1.8 },
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'large', 'blade ID': '1', 'length (cm)': 58.0, 'width (cm)': 4.4 },
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'large', 'blade ID': '2', 'length (cm)': 45.2, 'width (cm)': 3.8 },
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'large', 'blade ID': '3', 'length (cm)': 62.1, 'width (cm)': 5.1 },
+            { 'Date': '25/03/25', 'sample ID': '4-SW-1', 'subset': 'large', 'blade ID': '4', 'length (cm)': 41.3, 'width (cm)': 3.2 },
+
+            // Station 4-NE-5 - Summary row
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': '', 'blade ID': '', 'length (cm)': '', 'width (cm)': '', 'AV all_l (cm)': 42.0, 'SD all_l (cm)': 31.0 },
+            // Individual measurements for 4-NE-5
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'small', 'blade ID': '1', 'length (cm)': 12.3, 'width (cm)': 3.3 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'small', 'blade ID': '2', 'length (cm)': 15.1, 'width (cm)': 2.8 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'small', 'blade ID': '3', 'length (cm)': 11.7, 'width (cm)': 3.1 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'large', 'blade ID': '1', 'length (cm)': 61.3, 'width (cm)': 6.2 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'large', 'blade ID': '2', 'length (cm)': 55.8, 'width (cm)': 5.9 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'large', 'blade ID': '3', 'length (cm)': 68.2, 'width (cm)': 7.1 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'large', 'blade ID': '4', 'length (cm)': 52.4, 'width (cm)': 4.8 },
+            { 'Date': '25/03/25', 'sample ID': '4-NE-5', 'subset': 'large', 'blade ID': '5', 'length (cm)': 3.2, 'width (cm)': 1.1 }, // Outlier
+        ];
+
+        // Copy all the box plot functions from our implementation
+        function extractIndividualBladeData(rawData, measurementType) {
+            console.log('🔍 === EXTRACTING INDIVIDUAL BLADE DATA ===');
+            console.log(`Measurement type: ${measurementType}`);
+
+            const stationMeasurements = {};
+            const stationSet = new Set();
+
+            rawData.forEach(row => {
+                const sampleId = row['sample ID'];
+                const bladeId = row['blade ID'];
+                const measurement = parseFloat(row[measurementType]);
+
+                // Skip summary rows (no blade ID)
+                if (!bladeId || bladeId === '' || isNaN(measurement) || measurement <= 0) {
+                    return;
+                }
+
+                if (!sampleId || sampleId === '') {
+                    return;
+                }
+
+                stationSet.add(sampleId);
+
+                if (!stationMeasurements[sampleId]) {
+                    stationMeasurements[sampleId] = [];
+                }
+
+                stationMeasurements[sampleId].push({
+                    bladeId: bladeId,
+                    value: measurement,
+                    subset: row.subset || 'unknown'
+                });
+            });
+
+            // Log results
+            const stations = Array.from(stationSet).sort();
+            stations.forEach(station => {
+                const count = stationMeasurements[station].length;
+                const values = stationMeasurements[station].map(m => m.value);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                console.log(`📊 Station ${station}: ${count} measurements (${min.toFixed(1)}-${max.toFixed(1)})`);
+            });
+
+            return stationMeasurements;
+        }
+
+        function mapVariableToIndividualColumn(selectedVariable) {
+            const mapping = {
+                'AV sml_l (cm)': 'length (cm)',
+                'AV lrg_l (cm)': 'length (cm)',
+                'AV all_l (cm)': 'length (cm)',
+                'AV sml_w (cm)': 'width (cm)',
+                'AV lrg_w (cm)': 'width (cm)',
+                'AV all_w (cm)': 'width (cm)'
+            };
+            return mapping[selectedVariable];
+        }
+
+        function filterMeasurementsBySubset(measurements, selectedVariable) {
+            let targetSubset = 'all';
+            if (selectedVariable.includes('sml_')) {
+                targetSubset = 'small';
+            } else if (selectedVariable.includes('lrg_')) {
+                targetSubset = 'large';
+            }
+
+            if (targetSubset === 'all') {
+                console.log('📊 Using all measurements (small + large combined)');
+                return measurements.map(m => m.value);
+            }
+
+            const filteredMeasurements = measurements
+                .filter(m => m.subset === targetSubset)
+                .map(m => m.value);
+
+            console.log(`📊 Filtered to ${targetSubset}: ${filteredMeasurements.length}/${measurements.length} measurements`);
+            return filteredMeasurements;
+        }
+
+        function calculateBoxPlotStatistics(values) {
+            console.log(`📊 Calculating box plot stats for ${values.length} values`);
+
+            if (!values || values.length === 0) return null;
+
+            const sortedValues = [...values].sort((a, b) => a - b);
+            const n = sortedValues.length;
+
+            const calculatePercentile = (p) => {
+                const index = (n - 1) * p;
+                const lower = Math.floor(index);
+                const upper = Math.ceil(index);
+                const weight = index % 1;
+
+                if (upper >= n) return sortedValues[n - 1];
+                if (lower < 0) return sortedValues[0];
+
+                return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+            };
+
+            const min = sortedValues[0];
+            const q1 = calculatePercentile(0.25);
+            const median = calculatePercentile(0.50);
+            const q3 = calculatePercentile(0.75);
+            const max = sortedValues[n - 1];
+
+            const iqr = q3 - q1;
+            const lowerFence = q1 - 1.5 * iqr;
+            const upperFence = q3 + 1.5 * iqr;
+
+            const whiskerMin = sortedValues.find(v => v >= lowerFence) || min;
+            const whiskerMax = sortedValues.slice().reverse().find(v => v <= upperFence) || max;
+
+            const outliers = sortedValues.filter(v => v < lowerFence || v > upperFence);
+
+            const statistics = {
+                count: n,
+                min, q1, median, q3, max,
+                iqr, lowerFence, upperFence,
+                whiskerMin, whiskerMax,
+                outliers, rawValues: sortedValues
+            };
+
+            console.log(`📈 Stats: Min=${min.toFixed(1)}, Q1=${q1.toFixed(1)}, Med=${median.toFixed(1)}, Q3=${q3.toFixed(1)}, Max=${max.toFixed(1)}, Outliers=${outliers.length}`);
+
+            return statistics;
+        }
+
+        function aggregateBoxPlotData(rawData, selectedVariable) {
+            console.log('🎯 === AGGREGATING FOR BOX PLOTS ===');
+
+            const individualColumn = mapVariableToIndividualColumn(selectedVariable);
+            if (!individualColumn) return [];
+
+            const stationMeasurements = extractIndividualBladeData(rawData, individualColumn);
+            if (Object.keys(stationMeasurements).length === 0) return [];
+
+            const stations = Object.keys(stationMeasurements).sort();
+
+            return stations.map(station => {
+                const measurements = stationMeasurements[station];
+                const filteredValues = filterMeasurementsBySubset(measurements, selectedVariable);
+
+                if (filteredValues.length === 0) return null;
+
+                const statistics = calculateBoxPlotStatistics(filteredValues);
+                if (!statistics) return null;
+
+                return {
+                    station: station,
+                    statistics: statistics,
+                    variable: selectedVariable,
+                    individualColumn: individualColumn,
+                    hasBoxPlot: true,
+                    avgLength: statistics.median,
+                    count: statistics.count,
+                    hasSD: true
+                };
+            }).filter(result => result !== null);
+        }
+
+        // Chart drawing function (simplified version)
+        function drawBoxPlotChart(canvas, data, selectedVariable) {
+            console.log('🎨 === DRAWING BOX PLOTS ===');
+
+            const ctx = canvas.getContext('2d');
+            const padding = 80;
+            const chartWidth = canvas.width - 2 * padding;
+            const chartHeight = canvas.height - 2 * padding;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Title
+            ctx.fillStyle = '#555';
+            ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${selectedVariable} Distribution by Station (Box Plots)`, padding, 50);
+
+            if (data.length === 0) {
+                ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // Calculate scaling
+            let maxValue = 0;
+            data.forEach(station => {
+                if (station.statistics) {
+                    maxValue = Math.max(maxValue, station.statistics.max, ...station.statistics.outliers);
+                }
+            });
+            maxValue *= 1.1;
+
+            const yScale = chartHeight / maxValue;
+            const boxWidth = chartWidth / data.length * 0.7;
+            const boxSpacing = chartWidth / data.length * 0.3;
+
+            // Colors
+            const boxColor = '#e3f2fd';
+            const boxStroke = '#1976d2';
+            const medianColor = '#d32f2f';
+            const whiskerColor = '#424242';
+            const outlierColor = '#ff5722';
+
+            // Draw gridlines
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 0.5;
+            ctx.setLineDash([2, 4]);
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (chartHeight * i / 5);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(padding + chartWidth, y);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Draw box plots
+            data.forEach((station, index) => {
+                const x = padding + index * (boxWidth + boxSpacing) + boxSpacing / 2;
+                const centerX = x + boxWidth / 2;
+                const stats = station.statistics;
+
+                // Calculate positions
+                const q1Y = canvas.height - padding - (stats.q1 * yScale);
+                const medianY = canvas.height - padding - (stats.median * yScale);
+                const q3Y = canvas.height - padding - (stats.q3 * yScale);
+                const whiskerMinY = canvas.height - padding - (stats.whiskerMin * yScale);
+                const whiskerMaxY = canvas.height - padding - (stats.whiskerMax * yScale);
+
+                // Whiskers
+                ctx.strokeStyle = whiskerColor;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(centerX, q3Y);
+                ctx.lineTo(centerX, whiskerMaxY);
+                ctx.moveTo(centerX, q1Y);
+                ctx.lineTo(centerX, whiskerMinY);
+                ctx.stroke();
+
+                // Whisker caps
+                const capWidth = boxWidth * 0.3;
+                ctx.beginPath();
+                ctx.moveTo(centerX - capWidth/2, whiskerMaxY);
+                ctx.lineTo(centerX + capWidth/2, whiskerMaxY);
+                ctx.moveTo(centerX - capWidth/2, whiskerMinY);
+                ctx.lineTo(centerX + capWidth/2, whiskerMinY);
+                ctx.stroke();
+
+                // Box
+                const boxHeight = q1Y - q3Y;
+                const boxLeft = x + boxWidth * 0.15;
+                const boxDrawWidth = boxWidth * 0.7;
+
+                ctx.fillStyle = boxColor;
+                ctx.fillRect(boxLeft, q3Y, boxDrawWidth, boxHeight);
+
+                ctx.strokeStyle = boxStroke;
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(boxLeft, q3Y, boxDrawWidth, boxHeight);
+
+                // Median line
+                ctx.strokeStyle = medianColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(boxLeft, medianY);
+                ctx.lineTo(boxLeft + boxDrawWidth, medianY);
+                ctx.stroke();
+
+                // Outliers
+                if (stats.outliers.length > 0) {
+                    ctx.fillStyle = outlierColor;
+                    stats.outliers.forEach(outlier => {
+                        const outlierY = canvas.height - padding - (outlier * yScale);
+                        ctx.beginPath();
+                        ctx.arc(centerX, outlierY, 3, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+
+                // Station label
+                ctx.save();
+                ctx.translate(centerX, canvas.height - padding + 15);
+                ctx.rotate(-Math.PI / 4);
+                ctx.fillStyle = '#374151';
+                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(station.station, 0, 0);
+                ctx.restore();
+            });
+
+            // Axes
+            ctx.strokeStyle = '#374151';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, padding + chartHeight);
+            ctx.moveTo(padding, canvas.height - padding);
+            ctx.lineTo(padding + chartWidth, canvas.height - padding);
+            ctx.stroke();
+
+            // Y-axis labels
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 5; i++) {
+                const value = (maxValue * i / 5).toFixed(1);
+                const y = canvas.height - padding - (chartHeight * i / 5);
+                ctx.fillText(value, padding - 10, y + 4);
+            }
+
+            console.log('✅ Box plot drawing complete');
+        }
+
+        function displayStatistics(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('statsDisplay').innerHTML = '<p>No statistics to display</p>';
+                return;
+            }
+
+            let html = '<table class="stats-table">';
+            html += '<tr><th>Station</th><th>Count</th><th>Min</th><th>Q1</th><th>Median</th><th>Q3</th><th>Max</th><th>IQR</th><th>Outliers</th></tr>';
+
+            data.forEach(station => {
+                const stats = station.statistics;
+                const outlierCount = stats.outliers.length;
+                html += `<tr>
+                    <td><strong>${station.station}</strong></td>
+                    <td>${stats.count}</td>
+                    <td>${stats.min.toFixed(1)}</td>
+                    <td>${stats.q1.toFixed(1)}</td>
+                    <td>${stats.median.toFixed(1)}</td>
+                    <td>${stats.q3.toFixed(1)}</td>
+                    <td>${stats.max.toFixed(1)}</td>
+                    <td>${stats.iqr.toFixed(1)}</td>
+                    <td>${outlierCount} ${outlierCount > 0 ? '(' + stats.outliers.map(o => o.toFixed(1)).join(', ') + ')' : ''}</td>
+                </tr>`;
+            });
+
+            html += '</table>';
+            document.getElementById('statsDisplay').innerHTML = html;
+        }
+
+        function runBoxPlotTest() {
+            console.log('\n🚀 === RUNNING TRUE BOX PLOT TEST ===');
+
+            const selectedVariable = document.getElementById('variableSelect').value;
+            const canvas = document.getElementById('testCanvas');
+
+            console.log(`Selected variable: ${selectedVariable}`);
+
+            const boxPlotData = aggregateBoxPlotData(realIndividualData, selectedVariable);
+
+            if (boxPlotData.length === 0) {
+                console.log('❌ No box plot data generated');
+                return;
+            }
+
+            drawBoxPlotChart(canvas, boxPlotData, selectedVariable);
+            displayStatistics(boxPlotData);
+
+            console.log('✅ True box plot test complete\n');
+        }
+
+        function runLegacyTest() {
+            console.log('\n🔄 === RUNNING LEGACY TEST ===');
+            console.log('Legacy test would use summary statistics only');
+            console.log('✅ Legacy test placeholder complete\n');
+        }
+
+        // Initial setup
+        console.log('🧪 True Box Plot Test Environment Ready');
+        console.log('Data loaded:', realIndividualData.length, 'rows');
+
+        // Auto-run initial test
+        setTimeout(() => runBoxPlotTest(), 1000);
+    </script>
+</body>
+</html>

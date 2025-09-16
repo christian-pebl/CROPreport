@@ -6259,20 +6259,349 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return this.parseCSVFile(selectedFile);
     }
 
+    // Extract individual blade measurements from raw data for true whisker plots
+    extractIndividualBladeData(rawData, measurementType) {
+        console.log('🔍 === EXTRACTING INDIVIDUAL BLADE DATA ===');
+        console.log(`Measurement type: ${measurementType}`);
+        console.log(`Raw data rows: ${rawData.length}`);
+
+        const stationMeasurements = {};
+        const stationSet = new Set();
+
+        // Process each row to extract individual measurements
+        rawData.forEach((row, index) => {
+            const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const bladeId = row['blade ID'] || row.bladeId || row.blade_id;
+            const measurement = parseFloat(row[measurementType]);
+
+            // Skip summary rows (first row per station with no blade ID)
+            if (!bladeId || bladeId === '' || isNaN(measurement) || measurement <= 0) {
+                return;
+            }
+
+            // Skip rows without valid station ID
+            if (!sampleId || sampleId === '') {
+                return;
+            }
+
+            stationSet.add(sampleId);
+
+            if (!stationMeasurements[sampleId]) {
+                stationMeasurements[sampleId] = [];
+            }
+
+            stationMeasurements[sampleId].push({
+                bladeId: bladeId,
+                value: measurement,
+                subset: row.subset || 'unknown'
+            });
+        });
+
+        // Log extraction results
+        const stations = Array.from(stationSet).sort();
+        stations.forEach(station => {
+            const count = stationMeasurements[station].length;
+            const values = stationMeasurements[station].map(m => m.value);
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            console.log(`📊 Station ${station}: ${count} measurements (${min.toFixed(1)}-${max.toFixed(1)})`);
+        });
+
+        console.log(`✅ Extracted individual data for ${stations.length} stations`);
+        return stationMeasurements;
+    }
+
+    // Map AV variable names to individual measurement column names
+    mapVariableToIndividualColumn(selectedVariable) {
+        console.log('🗺️ Mapping variable to individual column:', selectedVariable);
+
+        const mapping = {
+            'AV sml_l (cm)': 'length (cm)',
+            'AV lrg_l (cm)': 'length (cm)',
+            'AV all_l (cm)': 'length (cm)',
+            'AV sml_w (cm)': 'width (cm)',
+            'AV lrg_w (cm)': 'width (cm)',
+            'AV all_w (cm)': 'width (cm)'
+        };
+
+        const individualColumn = mapping[selectedVariable];
+
+        if (!individualColumn) {
+            console.log('❌ No mapping found for variable:', selectedVariable);
+            return null;
+        }
+
+        console.log(`✅ Mapped ${selectedVariable} → ${individualColumn}`);
+        return individualColumn;
+    }
+
+    // Filter measurements by subset if needed
+    filterMeasurementsBySubset(measurements, selectedVariable) {
+        console.log('🔍 Filtering measurements by subset for:', selectedVariable);
+
+        // Determine target subset based on variable
+        let targetSubset = 'all';
+        if (selectedVariable.includes('sml_')) {
+            targetSubset = 'small';
+        } else if (selectedVariable.includes('lrg_')) {
+            targetSubset = 'large';
+        }
+
+        if (targetSubset === 'all') {
+            console.log('📊 Using all measurements (small + large combined)');
+            return measurements.map(m => m.value);
+        }
+
+        const filteredMeasurements = measurements
+            .filter(m => m.subset === targetSubset)
+            .map(m => m.value);
+
+        console.log(`📊 Filtered to ${targetSubset}: ${filteredMeasurements.length}/${measurements.length} measurements`);
+        return filteredMeasurements;
+    }
+
+    // Calculate box plot statistics (quartiles, outliers, etc.)
+    calculateBoxPlotStatistics(values) {
+        console.log('📊 === CALCULATING BOX PLOT STATISTICS ===');
+        console.log(`Input values: ${values.length} measurements`);
+
+        if (!values || values.length === 0) {
+            console.log('❌ No values provided for box plot calculation');
+            return null;
+        }
+
+        // Sort values for percentile calculations
+        const sortedValues = [...values].sort((a, b) => a - b);
+        const n = sortedValues.length;
+
+        console.log(`📊 Sorted range: ${sortedValues[0].toFixed(1)} to ${sortedValues[n-1].toFixed(1)}`);
+
+        // Calculate percentiles using linear interpolation
+        const calculatePercentile = (p) => {
+            const index = (n - 1) * p;
+            const lower = Math.floor(index);
+            const upper = Math.ceil(index);
+            const weight = index % 1;
+
+            if (upper >= n) return sortedValues[n - 1];
+            if (lower < 0) return sortedValues[0];
+
+            return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+        };
+
+        // Calculate quartiles
+        const min = sortedValues[0];
+        const q1 = calculatePercentile(0.25);
+        const median = calculatePercentile(0.50);
+        const q3 = calculatePercentile(0.75);
+        const max = sortedValues[n - 1];
+
+        // Calculate IQR and fences
+        const iqr = q3 - q1;
+        const lowerFence = q1 - 1.5 * iqr;
+        const upperFence = q3 + 1.5 * iqr;
+
+        // Find whisker ends (min/max within fences)
+        const whiskerMin = sortedValues.find(v => v >= lowerFence) || min;
+        const whiskerMax = sortedValues.slice().reverse().find(v => v <= upperFence) || max;
+
+        // Identify outliers
+        const outliers = sortedValues.filter(v => v < lowerFence || v > upperFence);
+
+        const statistics = {
+            count: n,
+            min: min,
+            q1: q1,
+            median: median,
+            q3: q3,
+            max: max,
+            iqr: iqr,
+            lowerFence: lowerFence,
+            upperFence: upperFence,
+            whiskerMin: whiskerMin,
+            whiskerMax: whiskerMax,
+            outliers: outliers,
+            rawValues: sortedValues
+        };
+
+        // Log detailed statistics
+        console.log('📊 Box Plot Statistics:');
+        console.log(`   Count: ${n}`);
+        console.log(`   Min: ${min.toFixed(2)}`);
+        console.log(`   Q1: ${q1.toFixed(2)}`);
+        console.log(`   Median: ${median.toFixed(2)}`);
+        console.log(`   Q3: ${q3.toFixed(2)}`);
+        console.log(`   Max: ${max.toFixed(2)}`);
+        console.log(`   IQR: ${iqr.toFixed(2)}`);
+        console.log(`   Whiskers: ${whiskerMin.toFixed(2)} to ${whiskerMax.toFixed(2)}`);
+        console.log(`   Outliers: ${outliers.length} (${outliers.map(v => v.toFixed(1)).join(', ')})`);
+
+        return statistics;
+    }
+
+    // Validate quartile calculations with basic checks
+    validateBoxPlotStatistics(stats) {
+        if (!stats) return false;
+
+        const checks = [
+            { name: 'Min ≤ Q1', pass: stats.min <= stats.q1 },
+            { name: 'Q1 ≤ Median', pass: stats.q1 <= stats.median },
+            { name: 'Median ≤ Q3', pass: stats.median <= stats.q3 },
+            { name: 'Q3 ≤ Max', pass: stats.q3 <= stats.max },
+            { name: 'IQR ≥ 0', pass: stats.iqr >= 0 },
+            { name: 'Count > 0', pass: stats.count > 0 }
+        ];
+
+        const failedChecks = checks.filter(check => !check.pass);
+
+        if (failedChecks.length > 0) {
+            console.log('❌ Box plot validation failed:');
+            failedChecks.forEach(check => console.log(`   ${check.name}: FAILED`));
+            return false;
+        }
+
+        console.log('✅ Box plot statistics validation passed');
+        return true;
+    }
+
+    // Detect corresponding SD column for a given AV column
+    detectStandardDeviationColumn(averageColumn) {
+        console.log('🔍 Detecting SD column for:', averageColumn);
+
+        // Convert AV column name to corresponding SD column name
+        // Example: "AV sml_l (cm)" → "SD sml_l (cm)"
+        const sdColumn = averageColumn.replace(/^AV\s/, 'SD ');
+
+        console.log('🎯 Detected SD column:', sdColumn);
+        return sdColumn;
+    }
+
+    // Validate that SD column exists in the data
+    validateSDColumn(rawData, sdColumn) {
+        if (!rawData || rawData.length === 0) {
+            console.log('❌ No data to validate SD column');
+            return false;
+        }
+
+        // Check if SD column exists in the first row (headers should be in first data row)
+        const firstRow = rawData[0];
+        const hasColumn = firstRow.hasOwnProperty(sdColumn);
+
+        console.log(`🔍 Validating SD column "${sdColumn}": ${hasColumn ? '✅ Found' : '❌ Not found'}`);
+
+        if (hasColumn) {
+            // Check if SD column has any valid numeric data
+            const validSDValues = rawData.filter(row => {
+                const sdValue = parseFloat(row[sdColumn]);
+                return !isNaN(sdValue) && sdValue >= 0;
+            }).length;
+
+            console.log(`📊 Valid SD values found: ${validSDValues}/${rawData.length}`);
+            return validSDValues > 0;
+        }
+
+        return false;
+    }
+
     aggregateLengthData(rawData, selectedVariable) {
-        console.log('=== AGGREGATING LENGTH DATA BY STATIONS ===');
+        console.log('🎯 === AGGREGATING INDIVIDUAL BLADE DATA FOR BOX PLOTS ===');
         console.log('Raw data rows:', rawData.length);
         console.log('Selected variable:', selectedVariable);
 
+        try {
+            // Map AV variable to individual measurement column
+            const individualColumn = this.mapVariableToIndividualColumn(selectedVariable);
+            if (!individualColumn) {
+                console.log('❌ Unable to map variable to individual column');
+                return [];
+            }
+
+            // Extract individual blade measurements by station
+            const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn);
+
+            if (Object.keys(stationMeasurements).length === 0) {
+                console.log('❌ No individual measurements extracted');
+                return [];
+            }
+
+            // Process each station to calculate box plot statistics
+            const stations = Object.keys(stationMeasurements).sort((a, b) =>
+                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+            );
+
+            const result = stations.map(station => {
+                console.log(`\n📊 Processing station: ${station}`);
+
+                const measurements = stationMeasurements[station];
+
+                // Filter measurements by subset if needed (small/large/all)
+                const filteredValues = this.filterMeasurementsBySubset(measurements, selectedVariable);
+
+                if (filteredValues.length === 0) {
+                    console.log(`❌ No valid measurements for station ${station}`);
+                    return null;
+                }
+
+                // Calculate box plot statistics
+                const statistics = this.calculateBoxPlotStatistics(filteredValues);
+
+                if (!statistics || !this.validateBoxPlotStatistics(statistics)) {
+                    console.log(`❌ Invalid statistics for station ${station}`);
+                    return null;
+                }
+
+                return {
+                    station: station,
+                    statistics: statistics,
+                    variable: selectedVariable,
+                    individualColumn: individualColumn,
+                    hasBoxPlot: true,
+
+                    // Legacy compatibility properties
+                    avgLength: statistics.median, // Use median as representative value
+                    standardDeviation: statistics.iqr / 1.349, // Approximate SD from IQR
+                    maxLength: statistics.max,
+                    minLength: statistics.min,
+                    count: statistics.count,
+                    hasSD: true // Always true for box plots
+                };
+            }).filter(result => result !== null);
+
+            console.log(`✅ Successfully processed ${result.length} stations for box plots`);
+            console.log('🎯 Box plot aggregation complete');
+
+            return result;
+
+        } catch (error) {
+            console.error('❌ Error in box plot aggregation:', error);
+
+            // Fallback to old method if individual data processing fails
+            console.log('🔄 Falling back to summary statistics method...');
+            return this.aggregateLengthDataLegacy(rawData, selectedVariable);
+        }
+    }
+
+    // Legacy aggregation method as fallback
+    aggregateLengthDataLegacy(rawData, selectedVariable) {
+        console.log('🔄 === LEGACY AGGREGATION (SUMMARY STATS ONLY) ===');
+
+        // Detect corresponding SD column
+        const sdColumn = this.detectStandardDeviationColumn(selectedVariable);
+        const hasValidSD = this.validateSDColumn(rawData, sdColumn);
+
+        console.log(`🔍 SD column detection: ${sdColumn} (Valid: ${hasValidSD})`);
+
         const stationGroups = {};
+        const stationSDGroups = {};
         const stationSet = new Set();
 
-        // Group data by station and collect values for the selected variable
+        // Group data by station and collect values for both AV and SD
         rawData.forEach(row => {
             const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
-            const value = parseFloat(row[selectedVariable]);
+            const avgValue = parseFloat(row[selectedVariable]);
+            const sdValue = hasValidSD ? parseFloat(row[sdColumn]) : null;
 
-            if (!sampleId || isNaN(value) || value <= 0) {
+            if (!sampleId || isNaN(avgValue) || avgValue <= 0) {
                 return; // Skip invalid rows
             }
 
@@ -6280,8 +6609,15 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             if (!stationGroups[sampleId]) {
                 stationGroups[sampleId] = [];
+                stationSDGroups[sampleId] = [];
             }
-            stationGroups[sampleId].push(value);
+
+            stationGroups[sampleId].push(avgValue);
+
+            // Store SD values if available and valid
+            if (hasValidSD && !isNaN(sdValue) && sdValue >= 0) {
+                stationSDGroups[sampleId].push(sdValue);
+            }
         });
 
         // Calculate statistics for each station
@@ -6290,76 +6626,197 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         );
 
         const result = stations.map(station => {
-            const values = stationGroups[station];
-            const avgLength = values.reduce((sum, v) => sum + v, 0) / values.length;
-            const maxLength = Math.max(...values);
-            const minLength = Math.min(...values);
+            const avgValues = stationGroups[station];
+            const sdValues = stationSDGroups[station];
+
+            // Calculate average of the average values
+            const avgLength = avgValues.reduce((sum, v) => sum + v, 0) / avgValues.length;
+            const maxLength = Math.max(...avgValues);
+            const minLength = Math.min(...avgValues);
+
+            // Calculate average SD if available
+            let avgSD = null;
+            if (hasValidSD && sdValues.length > 0) {
+                avgSD = sdValues.reduce((sum, v) => sum + v, 0) / sdValues.length;
+                console.log(`📊 Station ${station}: Avg=${avgLength.toFixed(1)}, SD=${avgSD.toFixed(1)}`);
+            } else {
+                console.log(`📊 Station ${station}: Avg=${avgLength.toFixed(1)}, SD=N/A`);
+            }
 
             return {
                 station: station,
                 avgLength: avgLength,
+                standardDeviation: avgSD,
                 maxLength: maxLength,
                 minLength: minLength,
-                count: values.length,
-                variable: selectedVariable
+                count: avgValues.length,
+                variable: selectedVariable,
+                sdColumn: sdColumn,
+                hasSD: hasValidSD && avgSD !== null,
+                hasBoxPlot: false // Legacy mode
             };
         });
 
-        console.log('Aggregated length data by stations:', result);
+        console.log('🎯 Legacy aggregated data:', result);
         return result;
     }
 
     renderLengthDistributionChart(rawData, lengthVars, outputDiv) {
-        console.log('=== RENDERING LENGTH DISTRIBUTION CHART ===');
+        console.log('=== RENDERING LENGTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
         console.log('Raw data rows:', rawData.length);
         console.log('Length variables:', lengthVars);
 
-        // For now, we'll work with the first selected variable (like blade count works with one parameter)
-        const selectedVariable = lengthVars[0];
-        if (!selectedVariable) {
+        try {
+            // Validate input parameters
+            if (!rawData || !Array.isArray(rawData)) {
+                throw new Error('Invalid raw data provided');
+            }
+
+            if (!lengthVars || !Array.isArray(lengthVars) || lengthVars.length === 0) {
+                throw new Error('No length variables provided');
+            }
+
+            if (!outputDiv) {
+                throw new Error('No output div provided');
+            }
+
+            // For now, we'll work with the first selected variable (like blade count works with one parameter)
+            const selectedVariable = lengthVars[0];
+            if (!selectedVariable) {
+                outputDiv.innerHTML = `
+                    <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                        <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Variable Selected</h4>
+                        <p>Please select a length variable to analyze.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Validate that the selected variable exists in data
+            const hasSelectedVariable = rawData.some(row => row.hasOwnProperty(selectedVariable));
+            if (!hasSelectedVariable) {
+                outputDiv.innerHTML = `
+                    <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                        <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Variable Not Found</h4>
+                        <p>The selected variable "${selectedVariable}" was not found in the data.</p>
+                        <p><small>Available columns: ${Object.keys(rawData[0] || {}).join(', ')}</small></p>
+                    </div>
+                `;
+                return;
+            }
+
+            console.log(`✅ Validation passed for variable: ${selectedVariable}`);
+
+            // Aggregate data by stations using our new method with SD support
+            const aggregatedData = this.aggregateLengthData(rawData, selectedVariable);
+
+            if (aggregatedData.length === 0) {
+                outputDiv.innerHTML = `
+                    <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                        <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Data</h4>
+                        <p>No valid length data found for variable: ${selectedVariable}</p>
+                        <p><small>Check that your data contains valid numeric values and station IDs.</small></p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Determine chart type and add informational message
+            const hasSDData = aggregatedData.some(d => d.hasSD);
+            const chartType = hasSDData ? 'Whisker Plot with Error Bars' : 'Standard Bar Chart';
+
+            console.log(`📊 Rendering ${chartType} for ${aggregatedData.length} stations`);
+
+            // Create chart container with status message
+            const chartContainer = document.createElement('div');
+            chartContainer.style.marginTop = '20px';
+
+            // Add chart type indicator
+            const chartTypeIndicator = document.createElement('div');
+            chartTypeIndicator.style.cssText = `
+                background: ${hasSDData ? '#f0f9ff' : '#f8fafc'};
+                border: 1px solid ${hasSDData ? '#0ea5e9' : '#64748b'};
+                border-radius: 6px;
+                padding: 10px;
+                margin-bottom: 15px;
+                text-align: center;
+                font-size: 13px;
+                color: ${hasSDData ? '#0369a1' : '#475569'};
+            `;
+            chartTypeIndicator.innerHTML = `
+                <strong>📊 Chart Type:</strong> ${chartType}
+                ${hasSDData ? '<br><small>Error bars show ±1 standard deviation</small>' : '<br><small>SD data not available - showing averages only</small>'}
+            `;
+            chartContainer.appendChild(chartTypeIndicator);
+
+            // Create canvas with error handling
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 500;
+            canvas.style.display = 'block';
+            canvas.style.margin = '0 auto';
+            chartContainer.appendChild(canvas);
+
+            try {
+                // Render the chart with station-based data
+                this.drawLengthDistributionChart(canvas, aggregatedData, selectedVariable);
+                console.log('✅ Chart rendered successfully');
+
+            } catch (drawError) {
+                console.error('❌ Error drawing chart:', drawError);
+
+                // Replace canvas with error message
+                chartContainer.removeChild(canvas);
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    background: #fef2f2;
+                    border: 1px solid #f87171;
+                    border-radius: 6px;
+                    padding: 15px;
+                    text-align: center;
+                `;
+                errorDiv.innerHTML = `
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Chart Rendering Error</h4>
+                    <p>Failed to render the ${chartType.toLowerCase()}</p>
+                    <p><small>Error: ${drawError.message}</small></p>
+                `;
+                chartContainer.appendChild(errorDiv);
+            }
+
+            // Clear loading message and add chart
+            outputDiv.innerHTML = '';
+            outputDiv.appendChild(chartContainer);
+
+            // Add enhanced summary table with SD information
+            try {
+                this.addEnhancedLengthSummaryTable(aggregatedData, selectedVariable, outputDiv);
+            } catch (tableError) {
+                console.error('❌ Error creating summary table:', tableError);
+                // Fallback to original table
+                this.addLengthSummaryTable(aggregatedData, selectedVariable, outputDiv);
+            }
+
+        } catch (error) {
+            console.error('❌ Error in renderLengthDistributionChart:', error);
+
             outputDiv.innerHTML = `
                 <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Variable Selected</h4>
-                    <p>Please select a length variable to analyze.</p>
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Rendering Error</h4>
+                    <p>Failed to create length distribution chart</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <details style="margin-top: 10px;">
+                        <summary style="cursor: pointer;">Technical Details</summary>
+                        <pre style="background: #f8f8f8; padding: 10px; border-radius: 4px; margin-top: 5px; font-size: 11px;">${error.stack || 'No stack trace available'}</pre>
+                    </details>
                 </div>
             `;
-            return;
         }
-
-        // Aggregate data by stations using our new method
-        const aggregatedData = this.aggregateLengthData(rawData, selectedVariable);
-
-        if (aggregatedData.length === 0) {
-            outputDiv.innerHTML = `
-                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
-                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Data</h4>
-                    <p>No valid length data found for variable: ${selectedVariable}</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Create chart container
-        const chartContainer = document.createElement('div');
-        chartContainer.style.marginTop = '20px';
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 800;
-        canvas.height = 500;
-        chartContainer.appendChild(canvas);
-
-        // Render the chart with station-based data
-        this.drawLengthDistributionChart(canvas, aggregatedData, selectedVariable);
-
-        // Clear loading message and add chart directly
-        outputDiv.innerHTML = '';
-        outputDiv.appendChild(chartContainer);
-
-        // Add summary table with station data
-        this.addLengthSummaryTable(aggregatedData, selectedVariable, outputDiv);
     }
 
     drawLengthDistributionChart(canvas, data, selectedVariable) {
+        console.log('🎨 === DRAWING TRUE BOX PLOTS ===');
+        console.log('Data length:', data.length);
+
         const ctx = canvas.getContext('2d');
         const padding = 80;
         const chartWidth = canvas.width - 2 * padding;
@@ -6370,11 +6827,19 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Determine chart type based on box plot availability
+        const hasBoxPlots = data.some(d => d.hasBoxPlot && d.statistics);
+        const chartTitle = hasBoxPlots
+            ? `${selectedVariable} Distribution by Station (Box Plots)`
+            : `Average ${selectedVariable} by Station`;
+
+        console.log(`📊 Chart type: ${hasBoxPlots ? 'Box Plot' : 'Regular Bar Chart'}`);
+
         // Add chart title
         ctx.fillStyle = '#555';
         ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(`Average ${selectedVariable} by Station`, padding, 50);
+        ctx.fillText(chartTitle, padding, 50);
 
         if (data.length === 0) {
             ctx.fillStyle = '#666';
@@ -6384,23 +6849,43 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return;
         }
 
-        // Calculate max value for scaling with 10% buffer
-        const maxDataValue = Math.max(...data.map(d => d.avgLength));
-        const maxValue = maxDataValue * 1.1;  // Add 10% buffer
+        // Calculate max value for scaling with buffer
+        let maxDataValue = 0;
+        let minDataValue = Infinity;
+
+        if (hasBoxPlots) {
+            // Use box plot statistics for scaling
+            data.forEach(station => {
+                if (station.statistics) {
+                    maxDataValue = Math.max(maxDataValue, station.statistics.max, ...station.statistics.outliers);
+                    minDataValue = Math.min(minDataValue, station.statistics.min, ...station.statistics.outliers);
+                }
+            });
+            console.log(`📏 Box plot range: ${minDataValue.toFixed(1)} to ${maxDataValue.toFixed(1)}`);
+        } else {
+            // Fallback to avgLength for scaling
+            maxDataValue = Math.max(...data.map(d => d.avgLength || 0));
+            minDataValue = 0;
+        }
+
+        const maxValue = maxDataValue * 1.1;  // 10% buffer
         const yScale = chartHeight / maxValue;
 
-        const barWidth = chartWidth / data.length * 0.7;
-        const barSpacing = chartWidth / data.length * 0.3;
+        const boxWidth = chartWidth / data.length * 0.7;  // Box width
+        const boxSpacing = chartWidth / data.length * 0.3;
 
-        // Use a blue color scheme for length data
-        const barColor = '#1f77b4';
+        // Color scheme for box plots
+        const boxColor = '#e3f2fd';      // Light blue fill
+        const boxStroke = '#1976d2';     // Blue border
+        const medianColor = '#d32f2f';   // Red median line
+        const whiskerColor = '#424242';  // Gray whiskers
+        const outlierColor = '#ff5722';  // Orange outliers
 
-        // Draw gridlines first (behind bars)
+        // Draw gridlines first
         ctx.strokeStyle = '#e0e0e0';
         ctx.lineWidth = 0.5;
         ctx.setLineDash([2, 4]);
 
-        // Draw horizontal gridlines
         for (let i = 0; i <= 5; i++) {
             const y = padding + (chartHeight * i / 5);
             ctx.beginPath();
@@ -6409,36 +6894,119 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             ctx.stroke();
         }
 
-        // Reset to solid lines for axes and bars
         ctx.setLineDash([]);
 
-        // Draw bars for each station
+        // Draw box plots for each station
         data.forEach((station, index) => {
-            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
-            const barHeight = station.avgLength * yScale;
+            const x = padding + index * (boxWidth + boxSpacing) + boxSpacing / 2;
+            const centerX = x + boxWidth / 2;
 
-            // Draw the bar
-            ctx.fillStyle = barColor;
-            ctx.fillRect(x, canvas.height - padding - barHeight, barWidth, barHeight);
+            console.log(`\n📊 Drawing chart for station: ${station.station}`);
 
-            // Station label (rotated for better fit)
+            if (hasBoxPlots && station.hasBoxPlot && station.statistics) {
+                const stats = station.statistics;
+                console.log(`📈 Drawing box plot: Q1=${stats.q1.toFixed(1)}, Med=${stats.median.toFixed(1)}, Q3=${stats.q3.toFixed(1)}`);
+
+                // Calculate y positions
+                const q1Y = canvas.height - padding - (stats.q1 * yScale);
+                const medianY = canvas.height - padding - (stats.median * yScale);
+                const q3Y = canvas.height - padding - (stats.q3 * yScale);
+                const whiskerMinY = canvas.height - padding - (stats.whiskerMin * yScale);
+                const whiskerMaxY = canvas.height - padding - (stats.whiskerMax * yScale);
+
+                // Draw whiskers (vertical lines)
+                ctx.strokeStyle = whiskerColor;
+                ctx.lineWidth = 1.5;
+
+                // Upper whisker
+                ctx.beginPath();
+                ctx.moveTo(centerX, q3Y);
+                ctx.lineTo(centerX, whiskerMaxY);
+                ctx.stroke();
+
+                // Lower whisker
+                ctx.beginPath();
+                ctx.moveTo(centerX, q1Y);
+                ctx.lineTo(centerX, whiskerMinY);
+                ctx.stroke();
+
+                // Whisker caps
+                const capWidth = boxWidth * 0.3;
+                ctx.beginPath();
+                ctx.moveTo(centerX - capWidth/2, whiskerMaxY);
+                ctx.lineTo(centerX + capWidth/2, whiskerMaxY);
+                ctx.moveTo(centerX - capWidth/2, whiskerMinY);
+                ctx.lineTo(centerX + capWidth/2, whiskerMinY);
+                ctx.stroke();
+
+                // Draw box (Q1 to Q3)
+                const boxHeight = q1Y - q3Y;
+                const boxLeft = x + boxWidth * 0.15;
+                const boxDrawWidth = boxWidth * 0.7;
+
+                // Box fill
+                ctx.fillStyle = boxColor;
+                ctx.fillRect(boxLeft, q3Y, boxDrawWidth, boxHeight);
+
+                // Box border
+                ctx.strokeStyle = boxStroke;
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(boxLeft, q3Y, boxDrawWidth, boxHeight);
+
+                // Median line
+                ctx.strokeStyle = medianColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(boxLeft, medianY);
+                ctx.lineTo(boxLeft + boxDrawWidth, medianY);
+                ctx.stroke();
+
+                // Draw outliers
+                if (stats.outliers && stats.outliers.length > 0) {
+                    ctx.fillStyle = outlierColor;
+                    stats.outliers.forEach(outlier => {
+                        const outlierY = canvas.height - padding - (outlier * yScale);
+                        ctx.beginPath();
+                        ctx.arc(centerX, outlierY, 3, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                    console.log(`🔴 Drew ${stats.outliers.length} outliers`);
+                }
+
+                // Add statistics label
+                ctx.fillStyle = '#1f2937';
+                ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                const labelText = `Med: ${stats.median.toFixed(1)}`;
+                ctx.fillText(labelText, centerX, whiskerMaxY - 8);
+
+            } else {
+                // Draw regular bar (fallback when no box plot data)
+                console.log(`📊 Drawing fallback bar chart: avg=${station.avgLength.toFixed(1)}`);
+
+                const barHeight = station.avgLength * yScale;
+                ctx.fillStyle = '#1f77b4';
+                ctx.fillRect(x + boxWidth * 0.2, canvas.height - padding - barHeight, boxWidth * 0.6, barHeight);
+
+                // Value label
+                ctx.fillStyle = '#1f2937';
+                ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.avgLength.toFixed(1), centerX, canvas.height - padding - barHeight - 5);
+            }
+
+            // Station label (rotated)
             ctx.save();
-            ctx.translate(x + barWidth / 2, canvas.height - padding + 15);
-            ctx.rotate(-Math.PI / 4); // 45 degree rotation
+            ctx.translate(centerX, canvas.height - padding + 15);
+            ctx.rotate(-Math.PI / 4);
             ctx.fillStyle = '#374151';
             ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'right';
             ctx.fillText(station.station, 0, 0);
             ctx.restore();
-
-            // Value on top of bar
-            ctx.fillStyle = '#1f2937';
-            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(station.avgLength.toFixed(1), x + barWidth / 2, canvas.height - padding - barHeight - 5);
         });
 
-        // Draw axes (on top of gridlines)
+        // Draw axes
         ctx.strokeStyle = '#374151';
         ctx.lineWidth = 1;
 
@@ -6472,8 +7040,138 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#374151';
         ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Average Length (cm)', 0, 0);
+        const yAxisTitle = hasBoxPlots ? 'Length (cm) Distribution' : 'Average Length (cm)';
+        ctx.fillText(yAxisTitle, 0, 0);
         ctx.restore();
+
+        // Add legend for box plots
+        if (hasBoxPlots) {
+            this.drawBoxPlotLegend(ctx, canvas, padding);
+        }
+
+        console.log('✅ Box plot chart drawing complete');
+    }
+
+    drawBoxPlotLegend(ctx, canvas, padding) {
+        console.log('🏷️ Drawing box plot legend');
+
+        const legendX = canvas.width - padding - 160;
+        const legendY = padding + 20;
+        const legendWidth = 150;
+        const legendHeight = 100;
+
+        // Legend background
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
+        ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
+
+        // Legend title
+        ctx.fillStyle = '#374151';
+        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Box Plot Components:', legendX + 8, legendY + 15);
+
+        // Mini box plot example
+        const exampleX = legendX + 15;
+        const exampleY = legendY + 30;
+        const exampleWidth = 20;
+        const exampleHeight = 30;
+
+        // Example whiskers
+        ctx.strokeStyle = '#424242';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(exampleX + 10, exampleY);
+        ctx.lineTo(exampleX + 10, exampleY + exampleHeight);
+        ctx.stroke();
+
+        // Example box
+        ctx.fillStyle = '#e3f2fd';
+        ctx.fillRect(exampleX + 3, exampleY + 8, 14, 14);
+        ctx.strokeStyle = '#1976d2';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(exampleX + 3, exampleY + 8, 14, 14);
+
+        // Example median line
+        ctx.strokeStyle = '#d32f2f';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(exampleX + 3, exampleY + 15);
+        ctx.lineTo(exampleX + 17, exampleY + 15);
+        ctx.stroke();
+
+        // Example outlier
+        ctx.fillStyle = '#ff5722';
+        ctx.beginPath();
+        ctx.arc(exampleX + 10, exampleY + 35, 2, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Legend labels
+        ctx.fillStyle = '#555';
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+
+        const labels = [
+            { text: '• Box: Q1 to Q3 (IQR)', y: legendY + 35 },
+            { text: '• Red line: Median', y: legendY + 46 },
+            { text: '• Whiskers: Data range', y: legendY + 57 },
+            { text: '• Orange dots: Outliers', y: legendY + 68 }
+        ];
+
+        labels.forEach(label => {
+            ctx.fillText(label.text, exampleX + 25, label.y);
+        });
+
+        // Add sample size note
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('Based on individual blade measurements', legendX + 8, legendY + 90);
+    }
+
+    drawWhiskerPlotLegend(ctx, canvas, padding) {
+        const legendX = canvas.width - padding - 150;
+        const legendY = padding + 20;
+
+        // Legend background
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        ctx.fillRect(legendX, legendY, 140, 60);
+        ctx.strokeRect(legendX, legendY, 140, 60);
+
+        // Legend title
+        ctx.fillStyle = '#374151';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Legend:', legendX + 10, legendY + 15);
+
+        // Mean indicator
+        ctx.fillStyle = '#1f77b4';
+        ctx.fillRect(legendX + 10, legendY + 22, 15, 3);
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('Mean', legendX + 30, legendY + 26);
+
+        // Error bar indicator
+        ctx.strokeStyle = '#0f5a8b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(legendX + 17, legendY + 32);
+        ctx.lineTo(legendX + 17, legendY + 42);
+        ctx.stroke();
+
+        // Error bar caps
+        ctx.beginPath();
+        ctx.moveTo(legendX + 14, legendY + 32);
+        ctx.lineTo(legendX + 20, legendY + 32);
+        ctx.moveTo(legendX + 14, legendY + 42);
+        ctx.lineTo(legendX + 20, legendY + 42);
+        ctx.stroke();
+
+        ctx.fillStyle = '#555';
+        ctx.fillText('±1 Std Dev', legendX + 30, legendY + 40);
     }
 
     getLengthVariableColor(index) {
@@ -6538,6 +7236,160 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         tableContainer.appendChild(table);
         outputDiv.appendChild(tableContainer);
+    }
+
+    addEnhancedLengthSummaryTable(data, selectedVariable, outputDiv) {
+        console.log('📊 Creating enhanced summary table with box plot support');
+
+        const tableContainer = document.createElement('div');
+        tableContainer.style.marginTop = '20px';
+
+        const hasBoxPlots = data.some(d => d.hasBoxPlot && d.statistics);
+
+        const tableTitle = document.createElement('h4');
+        tableTitle.textContent = hasBoxPlots
+            ? `${selectedVariable} Distribution Statistics by Station (Box Plot Data)`
+            : `${selectedVariable} Summary by Station`;
+        tableTitle.style.marginBottom = '10px';
+        tableTitle.style.color = '#374151';
+        tableContainer.appendChild(tableTitle);
+
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.backgroundColor = 'white';
+        table.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+        table.style.borderRadius = '6px';
+        table.style.overflow = 'hidden';
+
+        // Header
+        const thead = document.createElement('thead');
+        thead.style.backgroundColor = '#f8fafc';
+        const headerRow = document.createElement('tr');
+
+        let headers;
+        if (hasBoxPlots) {
+            headers = ['Station', 'Count', 'Min', 'Q1', 'Median', 'Q3', 'Max', 'IQR', 'Outliers'];
+        } else {
+            headers = ['Station', 'Average (cm)', 'Min (cm)', 'Max (cm)', 'Count'];
+        }
+
+        headers.forEach((text, index) => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            th.style.border = '1px solid #e5e7eb';
+            th.style.padding = '10px';
+            th.style.textAlign = 'center';
+            th.style.fontWeight = '600';
+            th.style.color = '#374151';
+            th.style.fontSize = '11px';
+
+            // Highlight key box plot columns
+            if (hasBoxPlots && ['Median', 'IQR', 'Outliers'].includes(text)) {
+                th.style.backgroundColor = '#f0f9ff';
+                th.style.color = '#0369a1';
+            } else {
+                th.style.backgroundColor = '#f8fafc';
+            }
+
+            headerRow.appendChild(th);
+        });
+
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        data.forEach((station, index) => {
+            const row = document.createElement('tr');
+            row.style.backgroundColor = index % 2 === 0 ? 'white' : '#f9fafb';
+
+            let values;
+            if (hasBoxPlots && station.statistics) {
+                const stats = station.statistics;
+                const outlierText = stats.outliers.length > 0
+                    ? `${stats.outliers.length} (${stats.outliers.map(o => o.toFixed(1)).join(', ')})`
+                    : '0';
+
+                values = [
+                    station.station,
+                    stats.count.toString(),
+                    stats.min.toFixed(1),
+                    stats.q1.toFixed(1),
+                    stats.median.toFixed(1),
+                    stats.q3.toFixed(1),
+                    stats.max.toFixed(1),
+                    stats.iqr.toFixed(1),
+                    outlierText
+                ];
+            } else {
+                values = [
+                    station.station,
+                    station.avgLength ? station.avgLength.toFixed(2) : 'N/A',
+                    station.minLength ? station.minLength.toFixed(2) : 'N/A',
+                    station.maxLength ? station.maxLength.toFixed(2) : 'N/A',
+                    station.count.toString()
+                ];
+            }
+
+            values.forEach((value, colIndex) => {
+                const td = document.createElement('td');
+                td.textContent = value;
+                td.style.border = '1px solid #e5e7eb';
+                td.style.padding = '8px';
+                td.style.textAlign = 'center';
+                td.style.fontSize = '11px';
+
+                // Highlight key statistics for box plots
+                if (hasBoxPlots && ['Median', 'IQR', 'Outliers'].includes(headers[colIndex])) {
+                    if (headers[colIndex] === 'Outliers' && value !== '0') {
+                        td.style.backgroundColor = '#fef2f2';
+                        td.style.color = '#dc2626';
+                        td.style.fontWeight = '500';
+                    } else {
+                        td.style.backgroundColor = '#f0f9ff';
+                        td.style.fontWeight = '500';
+                    }
+                }
+
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        tableContainer.appendChild(table);
+
+        // Add summary statistics
+        if (hasBoxPlots) {
+            const summaryDiv = document.createElement('div');
+            summaryDiv.style.cssText = `
+                margin-top: 15px;
+                padding: 12px;
+                background: #f0f9ff;
+                border: 1px solid #0ea5e9;
+                border-radius: 6px;
+                font-size: 12px;
+                color: #0369a1;
+            `;
+
+            const totalMeasurements = data.reduce((sum, d) => sum + (d.statistics?.count || 0), 0);
+            const totalOutliers = data.reduce((sum, d) => sum + (d.statistics?.outliers.length || 0), 0);
+            const avgMedian = data.reduce((sum, d) => sum + (d.statistics?.median || 0), 0) / data.length;
+
+            summaryDiv.innerHTML = `
+                <strong>📊 Box Plot Summary:</strong><br>
+                • Total individual measurements: ${totalMeasurements}<br>
+                • Average median across stations: ${avgMedian.toFixed(2)} cm<br>
+                • Total outliers detected: ${totalOutliers}<br>
+                • Data source: Individual blade measurements
+            `;
+
+            tableContainer.appendChild(summaryDiv);
+        }
+
+        outputDiv.appendChild(tableContainer);
+        console.log('✅ Enhanced box plot summary table created successfully');
     }
 }
 
