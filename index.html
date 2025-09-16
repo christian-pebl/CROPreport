@@ -201,7 +201,7 @@
                         <!-- Compare sites for specified length variable -->
                         <div class="comparison-card">
                             <div class="card-header">
-                                <h3>1. Length distribution constant file, comparing variables</h3>
+                                <h3>Length distribution comparing variables</h3>
                             </div>
                             <div class="card-body">
                                 <div class="form-row">
@@ -231,180 +231,55 @@
                             </div>
                         </div>
 
-                        <!-- Compare length variables for specified site -->
+                    </div>
+
+                </div>
+
+                <!-- Distribution of widths Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Distribution of widths</h2>
+                    </div>
+
+                    <div class="comparison-container">
+                        <!-- Compare sites for specified width variable -->
                         <div class="comparison-card">
                             <div class="card-header">
-                                <h3>2. Length distribution constant site, comparing variables</h3>
+                                <h3>Width distribution comparing variables</h3>
                             </div>
                             <div class="card-body">
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="siteSelectLength2">Select File:</label>
-                                        <select id="siteSelectLength2" class="form-control">
+                                        <label for="sitesSelectWidth1">Select File:</label>
+                                        <select id="sitesSelectWidth1" class="form-control">
                                             <option value="">Select a CSV file...</option>
                                         </select>
                                         <small class="help-text">Choose one CSV file to analyze</small>
                                     </div>
                                     <div class="form-group">
-                                        <label for="lengthVarsSelect2">Select Length Variables:</label>
-                                        <select id="lengthVarsSelect2" class="form-control" multiple>
-                                            <option value="AV sml_l (cm)">AV sml_l (cm)</option>
-                                            <option value="AV lrg_l (cm)">AV lrg_l (cm)</option>
-                                            <option value="AV all_l (cm)">AV all_l (cm)</option>
+                                        <label for="widthSelect1">Select Width Variables:</label>
+                                        <select id="widthSelect1" class="form-control" multiple>
+                                            <option value="AV sml_w (cm)">AV sml_w (cm)</option>
+                                            <option value="AV lrg_w (cm)">AV lrg_w (cm)</option>
+                                            <option value="AV all_w (cm)">AV all_w (cm)</option>
                                         </select>
-                                        <small class="help-text">Hold Ctrl/Cmd to select multiple length variables</small>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple width variables</small>
                                     </div>
                                 </div>
                                 <div class="button-row">
-                                    <button id="generateVariableComparisonLengthBtn" class="btn-primary" disabled>
+                                    <button id="generateSiteComparisonWidthBtn" class="btn-primary" disabled>
                                         Generate Variable Comparison Plot
                                     </button>
                                 </div>
-                                <div id="variableComparisonLengthOutput" class="output-area"></div>
+                                <div id="siteComparisonWidthOutput" class="output-area"></div>
                             </div>
                         </div>
+
                     </div>
 
                 </div>
 
-                <!-- 24 Hour Average DPM Section -->
-                <div class="plot-section-container">
-                    <div class="section-header">
-                        <h2>24 Hour Average DPM</h2>
-                    </div>
-                    
-                    <div class="comparison-container">
-                        <!-- Compare sites for specified source -->
-                        <div class="comparison-card">
-                            <div class="card-header">
-                                <h3>1. 24hr constant source, comparing sites</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="sourceSelect1">Select DPM Column:</label>
-                                        <select id="sourceSelect1" class="form-control">
-                                            <option value="">Select DPM column to plot...</option>
-                                        </select>
-                                        <small class="help-text">Choose Porpoise (DPM), Dolphin (DPM), or Sonar (DPM)</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="sitesSelect1">Select _24hr.csv Files:</label>
-                                        <select id="sitesSelect1" class="form-control" multiple>
-                                        </select>
-                                        <small class="help-text">Hold Ctrl/Cmd to select multiple _24hr.csv files</small>
-                                    </div>
-                                </div>
-                                <div class="button-row">
-                                    <button id="generateSiteComparisonBtn" class="btn-primary" disabled>
-                                        Generate Site Comparison Plot
-                                    </button>
-                                </div>
-                                <div id="siteComparisonOutput" class="output-area"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Compare sources for specified site -->
-                        <div class="comparison-card">
-                            <div class="card-header">
-                                <h3>2. 24hr constant site, comparing sources</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="siteSelect2">Select _24hr.csv File:</label>
-                                        <select id="siteSelect2" class="form-control">
-                                            <option value="">Select a _24hr.csv file...</option>
-                                        </select>
-                                        <small class="help-text">Choose one _24hr.csv file to analyze</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="sourcesSelect2">Select DPM Columns:</label>
-                                        <select id="sourcesSelect2" class="form-control" multiple>
-                                        </select>
-                                        <small class="help-text">Hold Ctrl/Cmd to select multiple DPM columns</small>
-                                    </div>
-                                </div>
-                                <div class="button-row">
-                                    <button id="generateSourceComparisonBtn" class="btn-primary" disabled>
-                                        Generate Source Comparison Plot
-                                    </button>
-                                </div>
-                                <div id="sourceComparisonOutput" class="output-area"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                </div>
 
-                <!-- Standard DPM Section -->
-                <div class="plot-section-container">
-                    <div class="section-header">
-                        <h2>Standard DPM Analysis</h2>
-                    </div>
-                    
-                    <div class="comparison-container">
-                        <!-- Compare sites for specified source -->
-                        <div class="comparison-card">
-                            <div class="card-header">
-                                <h3>1. Standard constant source, comparing sites</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="sourceSelectStd1">Select DPM Column:</label>
-                                        <select id="sourceSelectStd1" class="form-control">
-                                            <option value="">Select DPM column to plot...</option>
-                                        </select>
-                                        <small class="help-text">Choose Porpoise (DPM), Dolphin (DPM), or Sonar (DPM)</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="sitesSelectStd1">Select _std.csv Files:</label>
-                                        <select id="sitesSelectStd1" class="form-control" multiple>
-                                        </select>
-                                        <small class="help-text">Hold Ctrl/Cmd to select multiple _std.csv files</small>
-                                    </div>
-                                </div>
-                                <div class="button-row">
-                                    <button id="generateSiteComparisonStdBtn" class="btn-primary" disabled>
-                                        Generate Site Comparison Plot
-                                    </button>
-                                </div>
-                                <div id="siteComparisonStdOutput" class="output-area"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Compare sources for specified site -->
-                        <div class="comparison-card">
-                            <div class="card-header">
-                                <h3>2. Standard constant site, comparing sources</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="siteSelectStd2">Select _std.csv File:</label>
-                                        <select id="siteSelectStd2" class="form-control">
-                                            <option value="">Select a _std.csv file...</option>
-                                        </select>
-                                        <small class="help-text">Choose one _std.csv file to analyze</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="sourcesSelectStd2">Select DPM Columns:</label>
-                                        <select id="sourcesSelectStd2" class="form-control" multiple>
-                                        </select>
-                                        <small class="help-text">Hold Ctrl/Cmd to select multiple DPM columns</small>
-                                    </div>
-                                </div>
-                                <div class="button-row">
-                                    <button id="generateSourceComparisonStdBtn" class="btn-primary" disabled>
-                                        Generate Source Comparison Plot
-                                    </button>
-                                </div>
-                                <div id="sourceComparisonStdOutput" class="output-area"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </main>
         </div> <!-- End plotPage -->
 
