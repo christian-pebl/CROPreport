@@ -93,6 +93,21 @@
                     <!-- Files will be populated here -->
                 </div>
             </div>
+            <!-- Multi-File Management Panel -->
+            <div class="multi-file-panel hidden" id="multiFilePanel">
+                <div class="multi-file-header">
+                    <h3>📊 Loaded Files for Comparison</h3>
+                    <span class="file-count" id="multiFileCount">0/5 files loaded</span>
+                </div>
+                <div class="loaded-files-list" id="loadedFilesList">
+                    <!-- Loaded files will appear here -->
+                </div>
+                <div class="multi-file-controls">
+                    <button id="addMultiFileBtn" class="btn-primary">+ Add File for Comparison</button>
+                    <input type="file" id="multiFileInput" accept=".csv" hidden>
+                </div>
+            </div>
+
 
             <div class="file-info-compact hidden" id="fileInfoCompact">
                 <button id="fileInfoToggle" class="info-toggle">ℹ️</button>
@@ -201,6 +216,16 @@
                         <!-- Compare sites for specified length variable -->
                         <div class="comparison-card">
                             <div class="card-header">
+                                <!-- Multi-File Toggle -->
+                                <div class="multi-file-toggle-container">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="lengthMultiFileToggle">
+                                        <span class="toggle-slider"></span>
+                                        <span class="toggle-label">Multi-File Comparison Mode</span>
+                                    </label>
+                                    <small class="help-text">Compare length distributions across multiple sampling dates</small>
+                                </div>
+
                                 <h3>Length distribution comparing variables</h3>
                             </div>
                             <div class="card-body">
@@ -245,6 +270,16 @@
                         <!-- Compare sites for specified width variable -->
                         <div class="comparison-card">
                             <div class="card-header">
+                                <!-- Multi-File Toggle -->
+                                <div class="multi-file-toggle-container">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="widthMultiFileToggle">
+                                        <span class="toggle-slider"></span>
+                                        <span class="toggle-label">Multi-File Comparison Mode</span>
+                                    </label>
+                                    <small class="help-text">Compare width distributions across multiple sampling dates</small>
+                                </div>
+
                                 <h3>Width distribution comparing variables</h3>
                             </div>
                             <div class="card-body">

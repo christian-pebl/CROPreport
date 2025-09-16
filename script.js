@@ -6,6 +6,12 @@ class CSVManager {
         this.workingDirFiles = [];
         this.fileInfos = new Map(); // Map of baseName -> {original, std, hr24}
         this.showWorkingDirModal = true;
+        // Multi-file support
+        this.loadedFiles = new Map(); // samplingDate -> {data, headers, samplingDate, color, fileName}
+        this.activeFilesLength = new Set();
+        this.activeFilesWidth = new Set();
+        this.colorPalette = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6']; // Consistent colors
+        this.maxFiles = 5;
         
         this.initializeEventListeners();
         this.initializeWorkingDirModal();
@@ -140,6 +146,40 @@ class CSVManager {
                     navigationManager.updatePlotPageFileInfo().catch(console.error);
                     console.log('Updated plot page file info after creating new file');
                 }
+n        // Multi-file management event listeners
+        const addMultiFileBtn = document.getElementById("addMultiFileBtn");
+        const multiFileInput = document.getElementById("multiFileInput");
+        
+        if (addMultiFileBtn && multiFileInput) {
+            addMultiFileBtn.addEventListener("click", () => {
+                multiFileInput.click();
+            });
+            
+            multiFileInput.addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    this.handleMultiFileUpload(file);
+                    e.target.value = ""; // Reset input
+                }
+            });
+n        // Multi-file toggle event listeners
+        const lengthMultiFileToggle = document.getElementById("lengthMultiFileToggle");
+        const widthMultiFileToggle = document.getElementById("widthMultiFileToggle");
+        
+        if (lengthMultiFileToggle) {
+            lengthMultiFileToggle.addEventListener("change", (e) => {
+                this.toggleMultiFileMode("length", e.target.checked);
+            });
+        }
+        
+        if (widthMultiFileToggle) {
+            widthMultiFileToggle.addEventListener("change", (e) => {
+                this.toggleMultiFileMode("width", e.target.checked);
+            });
+        }
+
+        }
+
                 
                 // Hide buttons and clear pending conversion
                 confirmSaveBtn.style.display = 'none';
@@ -713,6 +753,23 @@ class CSVManager {
         
         return mockFile;
     }
+    // Multi-file helper functions
+    extractSamplingDate(data, headers) {
+        if (data.length === 0 || headers.length === 0) return null;
+        const firstColumn = headers[0];
+        const firstValue = data[0][firstColumn];
+        return firstValue ? String(firstValue).trim() : null;
+    }
+
+    getNextAvailableColor() {
+        const usedColors = Array.from(this.loadedFiles.values()).map(f => f.color);
+        return this.colorPalette.find(color => !usedColors.includes(color)) || this.colorPalette[0];
+    }
+
+    canAddMoreFiles() {
+        return this.loadedFiles.size < this.maxFiles;
+    }
+
 
     handleFileUpload(file) {
         console.log('=== HANDLE FILE UPLOAD ===');
@@ -757,6 +814,176 @@ class CSVManager {
             this.showError('Error reading the file. Please try again.');
         };
 
+        reader.readAsText(file);
+    }
+
+n    // Multi-file upload handler
+    handleMultiFileUpload(file) {
+        if (!this.canAddMoreFiles()) {
+            this.showError(`Maximum ${this.maxFiles} files allowed`);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const csvContent = e.target.result;
+            const parsed = this.parseCSVForMultiFile(csvContent, file.name);
+            
+            if (parsed) {
+                const color = this.getNextAvailableColor();
+                this.loadedFiles.set(parsed.samplingDate, {
+                    data: parsed.data,
+                    headers: parsed.headers,
+                    samplingDate: parsed.samplingDate,
+                    color: color,
+                    fileName: parsed.fileName
+                });
+                
+n    // Update the file management UI
+    updateFileManagementUI() {
+        const multiFilePanel = document.getElementById("multiFilePanel");
+        const multiFileCount = document.getElementById("multiFileCount");
+        const loadedFilesList = document.getElementById("loadedFilesList");
+        
+        if (!multiFilePanel || !multiFileCount || !loadedFilesList) return;
+        
+        // Show the panel if files are loaded
+        if (this.loadedFiles.size > 0) {
+            multiFilePanel.classList.remove("hidden");
+        }
+        
+        // Update file count
+        multiFileCount.textContent = `${this.loadedFiles.size}/${this.maxFiles} files loaded`;
+        
+        // Update files list
+        loadedFilesList.innerHTML = "";
+        
+        Array.from(this.loadedFiles.entries()).forEach(([samplingDate, fileInfo]) => {
+            const fileItem = document.createElement("div");
+            fileItem.className = "loaded-file-item";
+            fileItem.innerHTML = `
+                <div class="file-item-content">
+                    <div class="color-dot" style="background-color: ${fileInfo.color}"></div>
+                    <div class="file-info">
+                        <strong>${samplingDate}</strong>
+                        <span class="file-name">(${fileInfo.fileName})</span>
+                    </div>
+                    <div class="file-controls">
+                        <label><input type="checkbox" class="length-checkbox" data-date="${samplingDate}"> Length</label>
+                        <label><input type="checkbox" class="width-checkbox" data-date="${samplingDate}"> Width</label>
+                        <button class="remove-file-btn" data-date="${samplingDate}">×</button>
+                    </div>
+                </div>
+            `;
+            loadedFilesList.appendChild(fileItem);
+        });
+        
+        // Add event listeners for checkboxes and remove buttons
+        this.attachFileItemListeners();
+    }
+
+    // Attach event listeners to file item controls
+    attachFileItemListeners() {
+        const lengthCheckboxes = document.querySelectorAll(".length-checkbox");
+        const widthCheckboxes = document.querySelectorAll(".width-checkbox");
+        const removeButtons = document.querySelectorAll(".remove-file-btn");
+        
+        lengthCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener("change", (e) => {
+                const date = e.target.dataset.date;
+                if (e.target.checked) {
+                    this.activeFilesLength.add(date);
+                } else {
+                    this.activeFilesLength.delete(date);
+                }
+            });
+        });
+        
+        widthCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener("change", (e) => {
+                const date = e.target.dataset.date;
+                if (e.target.checked) {
+                    this.activeFilesWidth.add(date);
+                } else {
+                    this.activeFilesWidth.delete(date);
+                }
+            });
+        });
+        
+        removeButtons.forEach(button => {
+            button.addEventListener("click", (e) => {
+                const date = e.target.dataset.date;
+                this.removeLoadedFile(date);
+            });
+n    // Toggle multi-file mode for length or width
+    toggleMultiFileMode(type, enabled) {
+        const multiFilePanel = document.getElementById("multiFilePanel");
+        const addMultiFileBtn = document.getElementById("addMultiFileBtn");
+        
+        if (enabled) {
+            // Show multi-file panel and update button state
+            if (multiFilePanel) {
+                multiFilePanel.classList.remove("hidden");
+            }
+            
+            // Update button state based on file count
+            if (addMultiFileBtn) {
+                addMultiFileBtn.disabled = this.loadedFiles.size >= this.maxFiles;
+            }
+            
+            console.log(`Multi-file mode enabled for ${type}`);
+        } else {
+            // Only hide panel if both toggles are off
+            const lengthToggle = document.getElementById("lengthMultiFileToggle");
+            const widthToggle = document.getElementById("widthMultiFileToggle");
+            
+            if (!lengthToggle?.checked && !widthToggle?.checked) {
+                if (multiFilePanel) {
+                    multiFilePanel.classList.add("hidden");
+                }
+            }
+            
+            console.log(`Multi-file mode disabled for ${type}`);
+        }
+    }
+
+        });
+    }
+
+    // Remove a loaded file
+    removeLoadedFile(samplingDate) {
+        this.loadedFiles.delete(samplingDate);
+        this.activeFilesLength.delete(samplingDate);
+        this.activeFilesWidth.delete(samplingDate);
+        this.updateFileManagementUI();
+        
+        // If no files left, hide the panel
+        if (this.loadedFiles.size === 0) {
+            const multiFilePanel = document.getElementById("multiFilePanel");
+            if (multiFilePanel) {
+                multiFilePanel.classList.add("hidden");
+            }
+        }
+    }
+
+                console.log(`Added file: ${parsed.fileName}, Date: ${parsed.samplingDate}, Color: ${color}`);
+                this.updateFileManagementUI();
+                
+                // If this is the first file, also load as current
+                if (this.loadedFiles.size === 1) {
+                    this.csvData = parsed.data;
+                    this.headers = parsed.headers;
+                    this.fileName = parsed.fileName;
+                    this.displayFileInfo(file);
+                    this.renderTable();
+                }
+            }
+        };
+        
+        reader.onerror = () => {
+            this.showError("Error reading file");
+        };
+        
         reader.readAsText(file);
     }
 
@@ -842,6 +1069,35 @@ class CSVManager {
         // Add the last field
         result.push(current.trim());
         
+n    // Multi-file parsing function
+    parseCSVForMultiFile(csvContent, fileName) {
+        const lines = csvContent.split("
+").map(line => line.trim()).filter(line => line);
+        if (lines.length === 0) return null;
+
+        const headers = this.parseCSVLine(lines[0]);
+        const data = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+            const row = this.parseCSVLine(lines[i]);
+            if (row.length > 0) {
+                const rowObject = {};
+                headers.forEach((header, index) => {
+                    rowObject[header] = row[index] || "";
+                });
+                data.push(rowObject);
+            }
+        }
+        
+        const samplingDate = this.extractSamplingDate(data, headers);
+        if (!samplingDate) {
+            this.showError("Could not extract sampling date from first column");
+            return null;
+        }
+        
+        return { headers, data, samplingDate, fileName };
+    }
+
         return result;
     }
 
@@ -2995,6 +3251,360 @@ class CSVManager {
             successDiv.remove();
         }, 3000);
     }
+n    // Multi-file length chart renderer
+    renderMultiFileLengthChart(multiFileData, lengthVars, outputDiv) {
+        console.log("=== RENDERING MULTI-FILE LENGTH CHART ===");
+        console.log(`Data files: ${multiFileData.length}`);
+        console.log(`Variables: ${lengthVars.length}`);
+        
+        // Create container for the chart
+        const chartContainer = document.createElement("div");
+        chartContainer.className = "multi-file-chart-container";
+        
+        // Create title
+        const title = document.createElement("h4");
+        title.textContent = `Multi-File Length Distribution Comparison`;
+        title.style.textAlign = "center";
+        title.style.marginBottom = "20px";
+        title.style.color = "#374151";
+        
+        // Create canvas for the chart
+        const canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 500;
+        canvas.style.border = "1px solid #e5e7eb";
+        canvas.style.borderRadius = "6px";
+        canvas.style.backgroundColor = "white";
+        
+        chartContainer.appendChild(title);
+        chartContainer.appendChild(canvas);
+        
+        // Create statistics table
+        const statsContainer = this.createMultiFileStatsTable(multiFileData, lengthVars, "length");
+        chartContainer.appendChild(statsContainer);
+        
+        // Replace output content
+        outputDiv.innerHTML = "";
+        outputDiv.appendChild(chartContainer);
+        
+        // Draw the multi-file chart
+        this.drawMultiFileHistogram(canvas, multiFileData, lengthVars, "length");
+    }
+
+    // Multi-file width chart renderer
+    renderMultiFileWidthChart(multiFileData, widthVars, outputDiv) {
+        console.log("=== RENDERING MULTI-FILE WIDTH CHART ===");
+        console.log(`Data files: ${multiFileData.length}`);
+        console.log(`Variables: ${widthVars.length}`);
+        
+        // Create container for the chart
+        const chartContainer = document.createElement("div");
+        chartContainer.className = "multi-file-chart-container";
+        
+        // Create title
+        const title = document.createElement("h4");
+        title.textContent = `Multi-File Width Distribution Comparison`;
+        title.style.textAlign = "center";
+        title.style.marginBottom = "20px";
+        title.style.color = "#374151";
+        
+        // Create canvas for the chart
+        const canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 500;
+        canvas.style.border = "1px solid #e5e7eb";
+        canvas.style.borderRadius = "6px";
+        canvas.style.backgroundColor = "white";
+        
+        chartContainer.appendChild(title);
+n    // Draw side-by-side histograms for multiple files
+    drawMultiFileHistogram(canvas, multiFileData, variables, type) {
+        const ctx = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // Clear canvas
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        
+        // Chart settings
+        const margin = { top: 60, right: 50, bottom: 80, left: 80 };
+        const chartWidth = width - margin.left - margin.right;
+        const chartHeight = height - margin.top - margin.bottom;
+        
+        // Collect all data points to determine scale
+        const allValues = [];
+        const groupedData = new Map(); // samplingDate -> station -> variable -> values
+        
+        multiFileData.forEach(fileInfo => {
+            const { samplingDate, data, color } = fileInfo;
+            groupedData.set(samplingDate, new Map());
+            
+            data.forEach(row => {
+                const station = row["Station"] || row["station"] || "Unknown";
+                if (!groupedData.get(samplingDate).has(station)) {
+                    groupedData.get(samplingDate).set(station, new Map());
+                }
+                
+                variables.forEach(variable => {
+                    const value = parseFloat(row[variable]);
+                    if (!isNaN(value)) {
+                        allValues.push(value);
+                        if (!groupedData.get(samplingDate).get(station).has(variable)) {
+                            groupedData.get(samplingDate).get(station).set(variable, []);
+                        }
+                        groupedData.get(samplingDate).get(station).get(variable).push(value);
+                    }
+                });
+            });
+        });
+        
+        if (allValues.length === 0) {
+            ctx.fillStyle = "#6b7280";
+            ctx.font = "16px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("No valid data found", width / 2, height / 2);
+            return;
+        }
+        
+        // Calculate scales
+        const minValue = Math.min(...allValues);
+        const maxValue = Math.max(...allValues);
+        const valueRange = maxValue - minValue;
+        const yScale = chartHeight / (maxValue - minValue + valueRange * 0.1);
+        
+        // Create groups (sampling dates) with spacing
+        const groupNames = Array.from(groupedData.keys());
+        const groupWidth = chartWidth / groupNames.length;
+        const barGroupWidth = groupWidth * 0.8; // Leave 20% for spacing
+        const barSpacing = groupWidth * 0.1;
+        
+        // Draw background and grid
+        ctx.strokeStyle = "#e5e7eb";
+        ctx.lineWidth = 1;
+        
+        // Vertical grid lines
+        for (let i = 0; i <= groupNames.length; i++) {
+            const x = margin.left + i * groupWidth;
+            ctx.beginPath();
+            ctx.moveTo(x, margin.top);
+            ctx.lineTo(x, margin.top + chartHeight);
+            ctx.stroke();
+        }
+        
+        // Horizontal grid lines
+        const gridSteps = 5;
+        for (let i = 0; i <= gridSteps; i++) {
+            const y = margin.top + (i * chartHeight / gridSteps);
+            ctx.beginPath();
+            ctx.moveTo(margin.left, y);
+            ctx.lineTo(margin.left + chartWidth, y);
+            ctx.stroke();
+        }
+        
+        // Draw bars for each group (sampling date)
+        groupNames.forEach((samplingDate, groupIndex) => {
+            const fileInfo = multiFileData.find(f => f.samplingDate === samplingDate);
+            const color = fileInfo.color;
+            const groupX = margin.left + groupIndex * groupWidth + barSpacing;
+            
+            const stationData = groupedData.get(samplingDate);
+            const stationNames = Array.from(stationData.keys());
+            
+            // Calculate station averages for this sampling date
+            const stationAverages = new Map();
+            stationNames.forEach(station => {
+                const variableData = stationData.get(station);
+                let totalSum = 0;
+                let totalCount = 0;
+                
+                variables.forEach(variable => {
+                    const values = variableData.get(variable) || [];
+                    values.forEach(value => {
+                        totalSum += value;
+                        totalCount++;
+                    });
+                });
+                
+                if (totalCount > 0) {
+                    stationAverages.set(station, totalSum / totalCount);
+                }
+            });
+            
+            // Draw bars for each station within this sampling date
+            const validStations = Array.from(stationAverages.keys());
+            const stationBarWidth = barGroupWidth / Math.max(validStations.length, 1);
+            
+            validStations.forEach((station, stationIndex) => {
+n    // Draw legend for multi-file charts
+    drawMultiFileLegend(ctx, multiFileData, x, y) {
+        ctx.fillStyle = "#374151";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "left";
+        
+        multiFileData.forEach((fileInfo, index) => {
+            const legendY = y + index * 20;
+            
+            // Draw color square
+            ctx.fillStyle = fileInfo.color;
+            ctx.fillRect(x, legendY, 15, 15);
+            
+            // Draw label
+            ctx.fillStyle = "#374151";
+            ctx.fillText(fileInfo.samplingDate, x + 20, legendY + 12);
+        });
+    }
+
+    // Create statistics table for multi-file comparison
+    createMultiFileStatsTable(multiFileData, variables, type) {
+        const container = document.createElement("div");
+        container.className = "multi-file-stats-container";
+        container.style.marginTop = "20px";
+        
+        const title = document.createElement("h5");
+        title.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} Statistics by Sampling Date`;
+        title.style.marginBottom = "10px";
+        title.style.color = "#374151";
+        container.appendChild(title);
+        
+        const table = document.createElement("table");
+        table.className = "stats-table";
+        table.style.width = "100%";
+        table.style.borderCollapse = "collapse";
+        table.style.marginBottom = "10px";
+        
+        // Create header
+        const headerRow = document.createElement("tr");
+        headerRow.innerHTML = `
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Sampling Date</th>
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Stations</th>
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Mean</th>
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Std Dev</th>
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Min</th>
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Max</th>
+            <th style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;">Count</th>
+        `;
+        table.appendChild(headerRow);
+        
+        // Calculate statistics for each file
+        multiFileData.forEach(fileInfo => {
+            const { samplingDate, data, color } = fileInfo;
+            const allValues = [];
+            const stations = new Set();
+            
+            data.forEach(row => {
+                const station = row["Station"] || row["station"] || "Unknown";
+                stations.add(station);
+                
+                variables.forEach(variable => {
+                    const value = parseFloat(row[variable]);
+                    if (!isNaN(value)) {
+                        allValues.push(value);
+                    }
+                });
+            });
+            
+            if (allValues.length > 0) {
+                const mean = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+                const variance = allValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / allValues.length;
+                const stdDev = Math.sqrt(variance);
+                const min = Math.min(...allValues);
+                const max = Math.max(...allValues);
+                
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        <div style="display: flex; align-items: center;">
+                            <div style="width: 12px; height: 12px; background: ${color}; border-radius: 50%; margin-right: 8px;"></div>
+                            ${samplingDate}
+                        </div>
+                    </td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${stations.size}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${mean.toFixed(2)}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${stdDev.toFixed(2)}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${min.toFixed(2)}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${max.toFixed(2)}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${allValues.length}</td>
+                `;
+                table.appendChild(row);
+            }
+        });
+        
+        container.appendChild(table);
+        return container;
+    }
+
+                const average = stationAverages.get(station);
+                const barHeight = (average - minValue) * yScale;
+                const barX = groupX + stationIndex * stationBarWidth;
+                const barY = margin.top + chartHeight - barHeight;
+                
+                // Draw bar
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.8;
+                ctx.fillRect(barX, barY, stationBarWidth * 0.8, barHeight);
+                ctx.globalAlpha = 1.0;
+                
+                // Draw bar outline
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(barX, barY, stationBarWidth * 0.8, barHeight);
+            });
+            
+            // Draw sampling date label
+            ctx.fillStyle = "#374151";
+            ctx.font = "12px Arial";
+            ctx.textAlign = "center";
+            const labelX = groupX + barGroupWidth / 2;
+            ctx.save();
+            ctx.translate(labelX, margin.top + chartHeight + 20);
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillText(samplingDate, 0, 0);
+            ctx.restore();
+        });
+        
+        // Draw axes labels
+        ctx.fillStyle = "#374151";
+        ctx.font = "14px Arial";
+        ctx.textAlign = "center";
+        
+        // X-axis label
+        ctx.fillText("Sampling Date", width / 2, height - 20);
+        
+        // Y-axis label
+        ctx.save();
+        ctx.translate(20, height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(`${type.charAt(0).toUpperCase() + type.slice(1)} (cm)`, 0, 0);
+        ctx.restore();
+        
+        // Draw Y-axis scale
+        ctx.font = "10px Arial";
+        ctx.textAlign = "right";
+        for (let i = 0; i <= gridSteps; i++) {
+            const value = minValue + (maxValue - minValue) * (gridSteps - i) / gridSteps;
+            const y = margin.top + (i * chartHeight / gridSteps);
+            ctx.fillText(value.toFixed(1), margin.left - 10, y + 3);
+        }
+        
+        // Draw legend
+        this.drawMultiFileLegend(ctx, multiFileData, width - 200, margin.top);
+    }
+
+        chartContainer.appendChild(canvas);
+        
+        // Create statistics table
+        const statsContainer = this.createMultiFileStatsTable(multiFileData, widthVars, "width");
+        chartContainer.appendChild(statsContainer);
+        
+        // Replace output content
+        outputDiv.innerHTML = "";
+        outputDiv.appendChild(chartContainer);
+        
+        // Draw the multi-file chart
+        this.drawMultiFileHistogram(canvas, multiFileData, widthVars, "width");
+    }
+
 }
 
 // Navigation functionality
@@ -3198,10 +3808,7 @@ class NavigationManager {
 
         // Length button click handlers
         if (generateSiteComparisonLengthBtn) {
-            generateSiteComparisonLengthBtn.addEventListener('click', () => {
-                const site = sitesSelectLength1.value;
-                const lengthVars = Array.from(lengthSelect1.selectedOptions).map(option => option.value);
-                this.generateLengthDistributionFromFirstCard(site, lengthVars);
+generateSiteComparisonLengthBtn.addEventListener("click", () => {                const lengthMultiFileToggle = document.getElementById("lengthMultiFileToggle");                                if (lengthMultiFileToggle && lengthMultiFileToggle.checked) {                    // Multi-file mode                    const lengthVars = Array.from(lengthSelect1.selectedOptions).map(option => option.value);                    this.generateMultiFileLengthDistribution(lengthVars);                } else {                    // Single file mode                    const site = sitesSelectLength1.value;                    const lengthVars = Array.from(lengthSelect1.selectedOptions).map(option => option.value);                    this.generateLengthDistributionFromFirstCard(site, lengthVars);                }            });
             });
         }
 
@@ -3228,9 +3835,7 @@ class NavigationManager {
 
         if (generateSiteComparisonWidthBtn) {
             generateSiteComparisonWidthBtn.addEventListener('click', () => {
-                const site = sitesSelectWidth1.value;
-                const widthVars = Array.from(widthSelect1.selectedOptions).map(option => option.value);
-                this.generateWidthDistributionFromFirstCard(site, widthVars);
+const widthMultiFileToggle = document.getElementById("widthMultiFileToggle");                                if (widthMultiFileToggle && widthMultiFileToggle.checked) {                    // Multi-file mode                    const widthVars = Array.from(widthSelect1.selectedOptions).map(option => option.value);                    this.generateMultiFileWidthDistribution(widthVars);                } else {                    // Single file mode                    const site = sitesSelectWidth1.value;                    const widthVars = Array.from(widthSelect1.selectedOptions).map(option => option.value);                    this.generateWidthDistributionFromFirstCard(site, widthVars);                }
             });
         }
 
@@ -5425,6 +6030,83 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         console.log('=== GENERATE LENGTH SITE COMPARISON START ===');
         console.log('Length Variable:', lengthVar);
         console.log('Sites:', sites);
+n    // Multi-file length distribution function
+    async generateMultiFileLengthDistribution(lengthVars) {
+        console.log("=== MULTI-FILE LENGTH DISTRIBUTION START ===");
+        console.log("Length Variables:", lengthVars);
+        console.log("Active files for length:", Array.from(this.activeFilesLength));
+        
+        const outputDiv = document.getElementById("siteComparisonLengthOutput");
+        if (!outputDiv) {
+            console.error("Length distribution output div not found");
+            return;
+        }
+        
+        // Check if any files are selected for length comparison
+        if (this.activeFilesLength.size === 0) {
+            outputDiv.innerHTML = `
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #d97706; margin-bottom: 8px;">⚠️ No Files Selected</h4>
+                    <p>Please select files for length comparison using the checkboxes in the file management panel above.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        if (lengthVars.length === 0) {
+            outputDiv.innerHTML = `
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #d97706; margin-bottom: 8px;">⚠️ No Variables Selected</h4>
+                    <p>Please select at least one length variable to compare.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        outputDiv.classList.add("active");
+        
+        // Show loading message
+        const selectedFiles = Array.from(this.activeFilesLength);
+        outputDiv.innerHTML = `
+            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
+                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Multi-File Length Distribution...</h4>
+                <p>Comparing ${selectedFiles.length} files for variables: ${lengthVars.join(", ")}</p>
+                <p><small>Files: ${selectedFiles.join(", ")}</small></p>
+            </div>
+        `;
+        
+        try {
+            // Collect data from all selected files
+            const multiFileData = [];
+            
+            for (const samplingDate of this.activeFilesLength) {
+                const fileInfo = this.loadedFiles.get(samplingDate);
+                if (fileInfo) {
+                    multiFileData.push({
+                        samplingDate,
+                        data: fileInfo.data,
+                        color: fileInfo.color,
+                        fileName: fileInfo.fileName
+                    });
+                }
+            }
+            
+            console.log(`Collected data from ${multiFileData.length} files`);
+            
+            // Render multi-file length distribution chart
+            this.renderMultiFileLengthChart(multiFileData, lengthVars, outputDiv);
+            
+        } catch (error) {
+            console.error("Error in multi-file length distribution:", error);
+            outputDiv.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
+                    <p><strong>Multi-file plot creation failed:</strong> ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
 
         // This method would be for comparing the same variable across multiple sites
         // For now, redirect to the single-site comparison since we typically work with one file at a time
@@ -5586,6 +6268,83 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 </div>
             `;
         }
+n    // Multi-file width distribution function
+    async generateMultiFileWidthDistribution(widthVars) {
+        console.log("=== MULTI-FILE WIDTH DISTRIBUTION START ===");
+        console.log("Width Variables:", widthVars);
+        console.log("Active files for width:", Array.from(this.activeFilesWidth));
+        
+        const outputDiv = document.getElementById("siteComparisonWidthOutput");
+        if (!outputDiv) {
+            console.error("Width distribution output div not found");
+            return;
+        }
+        
+        // Check if any files are selected for width comparison
+        if (this.activeFilesWidth.size === 0) {
+            outputDiv.innerHTML = `
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #d97706; margin-bottom: 8px;">⚠️ No Files Selected</h4>
+                    <p>Please select files for width comparison using the checkboxes in the file management panel above.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        if (widthVars.length === 0) {
+            outputDiv.innerHTML = `
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #d97706; margin-bottom: 8px;">⚠️ No Variables Selected</h4>
+                    <p>Please select at least one width variable to compare.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        outputDiv.classList.add("active");
+        
+        // Show loading message
+        const selectedFiles = Array.from(this.activeFilesWidth);
+        outputDiv.innerHTML = `
+            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
+                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Multi-File Width Distribution...</h4>
+                <p>Comparing ${selectedFiles.length} files for variables: ${widthVars.join(", ")}</p>
+                <p><small>Files: ${selectedFiles.join(", ")}</small></p>
+            </div>
+        `;
+        
+        try {
+            // Collect data from all selected files
+            const multiFileData = [];
+            
+            for (const samplingDate of this.activeFilesWidth) {
+                const fileInfo = this.loadedFiles.get(samplingDate);
+                if (fileInfo) {
+                    multiFileData.push({
+                        samplingDate,
+                        data: fileInfo.data,
+                        color: fileInfo.color,
+                        fileName: fileInfo.fileName
+                    });
+                }
+            }
+            
+            console.log(`Collected data from ${multiFileData.length} files`);
+            
+            // Render multi-file width distribution chart
+            this.renderMultiFileWidthChart(multiFileData, widthVars, outputDiv);
+            
+        } catch (error) {
+            console.error("Error in multi-file width distribution:", error);
+            outputDiv.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
+                    <p><strong>Multi-file plot creation failed:</strong> ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
     }
 
     async generateWidthVariableComparison(site, widthVars) {
