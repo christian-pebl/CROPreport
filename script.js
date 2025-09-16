@@ -1111,6 +1111,10 @@ class CSVManager {
     }
 
     prepareTimeSeriesData(timeColumnIndex, numericColumns) {
+        console.log("=== DEBUG: prepareTimeSeriesData ===");
+        console.log("Input - timeColumnIndex:", timeColumnIndex, "numericColumns:", numericColumns.map(c => c.header));
+        console.log("CSV data length:", this.csvData.length);
+        console.log("CSV data sample:", this.csvData.slice(0, 3));
         const plotData = [];
         
         for (let rowIndex = 0; rowIndex < this.csvData.length; rowIndex++) {
@@ -1132,8 +1136,13 @@ class CSVManager {
             
             // Extract numeric values
             for (const col of numericColumns) {
+                console.log("DEBUG: Processing column", col.header, "for row", rowIndex);
+                const rawValue = row[col.index];
+                console.log("Raw value:", rawValue, "Type:", typeof rawValue);
                 const value = parseFloat(row[col.index]);
+                console.log("Parsed float value:", value, "isNaN:", isNaN(value));
                 if (!isNaN(value)) {
+                    console.log("Valid numeric value:", value, "for column:", col.header);
                     dataPoint.values[col.header] = value;
                 }
             }
@@ -1150,6 +1159,10 @@ class CSVManager {
             }
         });
         
+        console.log("=== DEBUG: prepareTimeSeriesData Output ===");
+        console.log("plotData length:", plotData.length);
+        console.log("plotData sample:", plotData.slice(0, 5));
+        console.log("Time range in data:", plotData.length > 0 ? {min: Math.min(...plotData.map(p => p.time)), max: Math.max(...plotData.map(p => p.time))} : "no data");
         return plotData;
     }
 
@@ -1241,8 +1254,26 @@ class CSVManager {
         });
 
         // Find time range
-        let timeMin = plotData[0].time;
-        let timeMax = plotData[plotData.length - 1].time;
+        console.log("=== DEBUG: Time Range Calculation ===");
+        console.log("plotData length:", plotData.length);
+        console.log("plotData sample:", plotData.slice(0, 3));
+        console.log("All plotData times:", plotData.map(p => ({time: p.time, values: Object.keys(p.values)})));
+        let timeMin = Infinity;
+        let timeMax = -Infinity;
+
+        plotData.forEach(point => {
+                console.log("Processing point - time:", point.time, "value for", col.header, ":", point.values[col.header]);
+            if (point.time < timeMin) timeMin = point.time;
+            if (point.time > timeMax) timeMax = point.time;
+        });
+
+        // Fallback for empty data
+        console.log("Initial time range - Min:", timeMin, "Max:", timeMax);
+        console.log("Time range span:", timeMax - timeMin);
+        if (timeMin === Infinity || timeMax === -Infinity) {
+            timeMin = plotData[0]?.time || new Date();
+            timeMax = plotData[plotData.length - 1]?.time || new Date();
+        }
 
         // Draw chart title (left-aligned)
         if (chartTitle) {
@@ -1262,6 +1293,9 @@ class CSVManager {
         ctx.stroke();
         
         // Draw time series
+        console.log("=== DEBUG: Drawing Time Series ===");
+        console.log("numericColumns:", numericColumns.map(c => c.header));
+        console.log("seriesStats:", seriesStats);
         numericColumns.forEach((col, seriesIndex) => {
             if (!seriesStats[col.header]) return;
 
@@ -1286,9 +1320,14 @@ class CSVManager {
             ctx.beginPath();
 
             let firstPoint = true;
+            console.log("=== DEBUG: Drawing series", col.header, "===");
+            console.log("Series color:", color, "isStdSeries:", isStdSeries);
+            console.log("Global min/max:", globalMin, globalMax, "Range:", range);
             plotData.forEach(point => {
+                console.log("Processing point - time:", point.time, "value for", col.header, ":", point.values[col.header]);
                 const value = point.values[col.header];
-                if (value === undefined) return;
+                if (value === undefined || value === null) return;
+                console.log("Point accepted - value:", value, "will plot at time:", point.time);
 
                 let x, y;
 
@@ -2562,7 +2601,9 @@ class CSVManager {
                         for (let j = 0; j < row.length; j++) {
                             if (j !== timeColumnIndex) {
                                 const value = parseFloat(row[j]);
+                console.log("Parsed float value:", value, "isNaN:", isNaN(value));
                                 if (!isNaN(value)) {
+                    console.log("Valid numeric value:", value, "for column:", col.header);
                                     numericData[this.headers[j]] = value;
                                     numericFieldCount++;
                                 }
@@ -2723,7 +2764,9 @@ class CSVManager {
                         for (let j = 0; j < this.headers.length; j++) {
                             if (j !== timeColumnIndex) { // Skip time column
                                 const value = parseFloat(row[j]);
+                console.log("Parsed float value:", value, "isNaN:", isNaN(value));
                                 if (!isNaN(value)) {
+                    console.log("Valid numeric value:", value, "for column:", col.header);
                                     numericData[this.headers[j]] = value;
                                     numericFieldCount++;
                                 }
@@ -3132,6 +3175,55 @@ class NavigationManager {
                 this.generateStdSourceComparison(site, sources);
             });
         }
+
+        // Length distribution controls
+        const lengthSelect1 = document.getElementById('lengthSelect1');
+        const sitesSelectLength1 = document.getElementById('sitesSelectLength1');
+        const generateSiteComparisonLengthBtn = document.getElementById('generateSiteComparisonLengthBtn');
+
+        const siteSelectLength2 = document.getElementById('siteSelectLength2');
+        const lengthVarsSelect2 = document.getElementById('lengthVarsSelect2');
+        const generateVariableComparisonLengthBtn = document.getElementById('generateVariableComparisonLengthBtn');
+
+        // Add event listeners for length distribution buttons
+        const updateLengthSiteComparisonButton = () => {
+            const siteSelected = sitesSelectLength1?.value;
+            const varsSelected = Array.from(lengthSelect1?.selectedOptions || []).map(option => option.value);
+            if (generateSiteComparisonLengthBtn) {
+                generateSiteComparisonLengthBtn.disabled = !siteSelected || varsSelected.length < 1;
+            }
+        };
+
+        const updateLengthVariableComparisonButton = () => {
+            const siteSelected = siteSelectLength2?.value;
+            const varsSelected = Array.from(lengthVarsSelect2?.selectedOptions || []).map(option => option.value);
+            if (generateVariableComparisonLengthBtn) {
+                generateVariableComparisonLengthBtn.disabled = !siteSelected || varsSelected.length < 1;
+            }
+        };
+
+        // Add event listeners for length controls
+        if (lengthSelect1) lengthSelect1.addEventListener('change', updateLengthSiteComparisonButton);
+        if (sitesSelectLength1) sitesSelectLength1.addEventListener('change', updateLengthSiteComparisonButton);
+        if (siteSelectLength2) siteSelectLength2.addEventListener('change', updateLengthVariableComparisonButton);
+        if (lengthVarsSelect2) lengthVarsSelect2.addEventListener('change', updateLengthVariableComparisonButton);
+
+        // Length button click handlers
+        if (generateSiteComparisonLengthBtn) {
+            generateSiteComparisonLengthBtn.addEventListener('click', () => {
+                const site = sitesSelectLength1.value;
+                const lengthVars = Array.from(lengthSelect1.selectedOptions).map(option => option.value);
+                this.generateLengthDistributionFromFirstCard(site, lengthVars);
+            });
+        }
+
+        if (generateVariableComparisonLengthBtn) {
+            generateVariableComparisonLengthBtn.addEventListener('click', () => {
+                const site = siteSelectLength2.value;
+                const lengthVars = Array.from(lengthVarsSelect2.selectedOptions).map(option => option.value);
+                this.generateLengthVariableComparison(site, lengthVars);
+            });
+        }
     }
 
     async updatePlotPageFileInfo(pageName = 'plot') {
@@ -3418,8 +3510,103 @@ class NavigationManager {
             });
         }
 
+        // Update length distribution dropdowns
+        this.updateLengthDropdowns(hr24Files, this.stdFiles, pageName);
+
+        // Update blade count dropdowns
+        this.updateBladeCountDropdowns(pageName);
+
         // Update std dropdowns
         this.updateStdDropdowns(sources, this.stdFiles, pageName);
+    }
+
+    updateBladeCountDropdowns(pageName = 'plot') {
+        console.log("🎛️ DEBUG: Starting blade count dropdown update process");
+
+        // Look for Indiv and Summary files
+        const bladeCountFiles = [];
+
+        if (this.availableFiles && this.availableFiles.length > 0) {
+            // Look for Indiv files (case insensitive, various patterns)
+            const individFiles = this.availableFiles.filter(file => {
+                const fileName = file.name.toLowerCase();
+                return fileName.includes('indiv') || fileName.includes('_indiv') || fileName.includes('individual');
+            });
+            bladeCountFiles.push(...individFiles);
+
+            // Look for Summary files (case insensitive, various patterns)
+            const summaryFiles = this.availableFiles.filter(file => {
+                const fileName = file.name.toLowerCase();
+                return fileName.includes('summary') || fileName.includes('_summary') || fileName.includes('summ');
+            });
+            bladeCountFiles.push(...summaryFiles);
+        }
+
+        console.log("📁 DEBUG: Found blade count files:", bladeCountFiles.map(f => f.name));
+
+        // Update data source dropdown
+        const dataSourceSelect = document.getElementById('dataSourceSelect');
+        if (dataSourceSelect) {
+            console.log("🎯 DEBUG: Found dataSourceSelect dropdown, populating with blade count files");
+            dataSourceSelect.innerHTML = '<option value="">Select data source...</option>';
+            bladeCountFiles.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                dataSourceSelect.appendChild(option);
+            });
+        }
+    }
+
+    updateLengthDropdowns(hr24Files, stdFiles, pageName = 'plot') {
+        console.log("🎛️ DEBUG: Starting length distribution dropdown update process");
+
+        // Look for the specific files that should contain length data (like Indiv files)
+        const lengthDataFiles = [];
+
+        // Check if availableFiles contains the expected files
+        if (this.availableFiles && this.availableFiles.length > 0) {
+            // Look for Indiv files (which should contain length data)
+            const individFiles = this.availableFiles.filter(file =>
+                file.name.includes('Indiv') || file.name.includes('_indiv')
+            );
+            lengthDataFiles.push(...individFiles);
+
+            // Also check for Summary files as backup
+            const summaryFiles = this.availableFiles.filter(file =>
+                file.name.includes('Summary') || file.name.includes('_summary')
+            );
+            lengthDataFiles.push(...summaryFiles);
+        }
+
+        console.log("📁 DEBUG: Found length data files:", lengthDataFiles.map(f => f.name));
+        const idPrefix = "";
+
+        // Update sites dropdown for length site comparison (length data files) - single select
+        const sitesSelectLength1 = document.getElementById(idPrefix + 'sitesSelectLength1');
+        if (sitesSelectLength1) {
+            console.log("🎯 DEBUG: Found sitesSelectLength1 dropdown, populating with length data files");
+            sitesSelectLength1.innerHTML = '<option value="">Select a CSV file...</option>';
+            lengthDataFiles.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                sitesSelectLength1.appendChild(option);
+            });
+        }
+
+        // Update site dropdown for length variable comparison (length data files)
+        const siteSelectLength2 = document.getElementById(idPrefix + 'siteSelectLength2');
+        if (siteSelectLength2) {
+            console.log("🎯 DEBUG: Found siteSelectLength2 dropdown, populating with length data files");
+            siteSelectLength2.innerHTML = '<option value="">Select a CSV file...</option>';
+            lengthDataFiles.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                siteSelectLength2.appendChild(option);
+            });
+        }
     }
 
     updateStdDropdowns(sources, stdFiles, pageName = 'plot') {
@@ -3867,10 +4054,26 @@ class NavigationManager {
                 Object.keys(hourlyData).forEach(hour => allTimePoints.add(hour));
             });
 
-            // Sort time points and format them as dates in dd/mm/yy format
-            const sortedHours = Array.from(allTimePoints).sort((a, b) => parseInt(a) - parseInt(b));
-            const hours = this.formatTimePointsAsDateLabels(sortedHours, siteData[0], "time");
+            // Sort time points properly by converting to Date objects
+            const sortedHours = Array.from(allTimePoints).sort((a, b) => {
+                const dateA = new Date(a.replace(/\//g, "-"));
+                const dateB = new Date(b.replace(/\//g, "-"));
+                return dateA - dateB;
+            });
+            
+            // Format all dates uniformly as dd/mm/yy
+            const hours = sortedHours.map(timeStr => {
+                const date = new Date(timeStr.replace(/\//g, "-"));
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = String(date.getFullYear()).slice(-2);
+                return `${day}/${month}/${year}`;
+            });
             console.log(`Using ${hours.length} time points from actual data:`, hours.slice(0, 5), '...');
+            console.log("=== DEBUG: Site Comparison Time Range ===");
+            console.log("All time points found:", allTimePoints);
+            console.log("Sorted hours:", sortedHours.slice(0, 10));
+            console.log("Formatted hours:", hours.slice(0, 10));
 
             let maxDPM = 0;
 
@@ -3880,9 +4083,13 @@ class NavigationManager {
                 console.log(`Hourly data for ${siteInfo.site}:`, Object.keys(hourlyData).length, 'hours');
 
                 const dpmValues = sortedHours.map(hour => {
-                    return hourlyData[hour] || 0;
+                console.log("=== DEBUG: Processing site", siteInfo.site, "===");
+                console.log("Hourly data keys:", Object.keys(hourlyData));
+                console.log("Sorted hours length:", sortedHours.length);
+                    return hourlyData[hour] !== undefined ? hourlyData[hour] : null;
+                    console.log("Hour", hour, "-> value:", hourlyData[hour], "mapped to:", hourlyData[hour] !== undefined ? hourlyData[hour] : null);
                 });
-                maxDPM = Math.max(maxDPM, ...dpmValues);
+                const validDpmValues = dpmValues.filter(v => v !== null); if (validDpmValues.length > 0) maxDPM = Math.max(maxDPM, ...validDpmValues);
                 
                 // Extract clean site name from filename
                 const siteName = this.extractSiteNameFromFilename(siteInfo.site);
@@ -4280,7 +4487,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#555555';
         
         // X-axis label (positioned lower to avoid overlap with rotated tick labels)
-        ctx.fillText(xAxisLabel, plotArea.left + plotArea.width / 2, xAxisLabel === "Date" ? plotArea.bottom + 70 : plotArea.bottom + 60);
+        ctx.fillText(xAxisLabel, plotArea.left + plotArea.width / 2, xAxisLabel === "Date" ? plotArea.bottom + 75 : plotArea.bottom + 65);
         
         // Left Y-axis label (moved much more RIGHT towards center)
         ctx.save();
@@ -4298,6 +4505,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 
     plotSiteData(ctx, plotArea, siteData, hours, maxDPM) {
+        console.log("=== DEBUG: plotSiteData ===");
+        console.log("Site:", siteData.site);
+        console.log("DPM values length:", siteData.dpmValues.length);
+        console.log("Hours length:", hours.length);
+        console.log("DPM values sample:", siteData.dpmValues.slice(0, 10));
+        console.log("Null count:", siteData.dpmValues.filter(v => v === null).length);
         const { site, dpmValues, color } = siteData;
         
         // Professional smooth line styling
@@ -4309,15 +4522,23 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const xStep = plotArea.width / (hours.length - 1);
         
         // Create smooth curve without data points
-        if (dpmValues.length < 2) return;
+        if (points.length < 2) {
+            console.log("Not enough valid points for site", site, "- only", points.length, "valid points");
+            return;
+        }
         
         ctx.beginPath();
         
-        // Calculate points
-        const points = dpmValues.map((dpm, i) => ({
-            x: plotArea.left + (i * xStep),
-            y: plotArea.bottom - (dpm / maxDPM) * plotArea.height
-        }));
+        // Calculate points, filtering out null values
+        const points = [];
+        dpmValues.forEach((dpm, i) => {
+            if (dpm !== null) {
+                points.push({
+                    x: plotArea.left + (i * xStep),
+                    y: plotArea.bottom - (dpm / maxDPM) * plotArea.height
+                });
+            }
+        });
         
         // Start the path
         ctx.moveTo(points[0].x, points[0].y);
@@ -4338,7 +4559,20 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 const endX = (current.x + next.x) / 2;
                 const endY = (current.y + next.y) / 2;
                 
-                ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+                // Enhanced smoothing with catmull-rom style curves
+                const cpX1 = (current.x + previous.x) / 2;
+                const cpY1 = (current.y + previous.y) / 2;
+                const cpX2 = (current.x + next.x) / 2;
+                const cpY2 = (current.y + next.y) / 2;
+                
+                ctx.bezierCurveTo(
+                    previous.x + (current.x - previous.x) / 6,
+                    previous.y + (current.y - previous.y) / 6,
+                    current.x - (next.x - current.x) / 6,
+                    current.y - (next.y - current.y) / 6,
+                    current.x,
+                    current.y
+                );
             }
         }
         
@@ -4532,19 +4766,39 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             Object.keys(hourlyData).forEach(hour => allTimePoints.add(hour));
         });
 
-        // Sort time points and format them as dates in dd/mm/yy format
-        const sortedHours = Array.from(allTimePoints).sort((a, b) => parseInt(a) - parseInt(b));
-        const hours = this.formatTimePointsAsDateLabels(sortedHours, {data: siteData}, "time");
+            // Sort time points properly by converting to Date objects
+            const sortedHours = Array.from(allTimePoints).sort((a, b) => {
+                const dateA = new Date(a.replace(/\//g, "-"));
+                const dateB = new Date(b.replace(/\//g, "-"));
+                return dateA - dateB;
+            });
+            
+            // Format all dates uniformly as dd/mm/yy
+            const hours = sortedHours.map(timeStr => {
+                const date = new Date(timeStr.replace(/\//g, "-"));
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = String(date.getFullYear()).slice(-2);
+                return `${day}/${month}/${year}`;
+            });
         console.log(`Using ${hours.length} time points from actual data:`, hours.slice(0, 5), '...');
+            console.log("=== DEBUG: Site Comparison Time Range ===");
+            console.log("All time points found:", allTimePoints);
+            console.log("Sorted hours:", sortedHours.slice(0, 10));
+            console.log("Formatted hours:", hours.slice(0, 10));
 
         let maxDPM = 0;
 
         const plotData = sources.map((source, index) => {
             const hourlyData = this.extractHourlyData(siteData.data, source);
             const dpmValues = sortedHours.map(hour => {
-                return hourlyData[hour] || 0;
+                console.log("=== DEBUG: Processing site", siteInfo.site, "===");
+                console.log("Hourly data keys:", Object.keys(hourlyData));
+                console.log("Sorted hours length:", sortedHours.length);
+                return hourlyData[hour] !== undefined ? hourlyData[hour] : null;
+                    console.log("Hour", hour, "-> value:", hourlyData[hour], "mapped to:", hourlyData[hour] !== undefined ? hourlyData[hour] : null);
             });
-            maxDPM = Math.max(maxDPM, ...dpmValues);
+            const validDpmValues = dpmValues.filter(v => v !== null); if (validDpmValues.length > 0) maxDPM = Math.max(maxDPM, ...validDpmValues);
             
             return {
                 source: source,
@@ -4586,15 +4840,23 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const xStep = plotArea.width / (hours.length - 1);
         
         // Create smooth curve without data points
-        if (dpmValues.length < 2) return;
+        if (points.length < 2) {
+            console.log("Not enough valid points for site", site, "- only", points.length, "valid points");
+            return;
+        }
         
         ctx.beginPath();
         
-        // Calculate points
-        const points = dpmValues.map((dpm, i) => ({
-            x: plotArea.left + (i * xStep),
-            y: plotArea.bottom - (dpm / maxDPM) * plotArea.height
-        }));
+        // Calculate points, filtering out null values
+        const points = [];
+        dpmValues.forEach((dpm, i) => {
+            if (dpm !== null) {
+                points.push({
+                    x: plotArea.left + (i * xStep),
+                    y: plotArea.bottom - (dpm / maxDPM) * plotArea.height
+                });
+            }
+        });
         
         // Start the path
         ctx.moveTo(points[0].x, points[0].y);
@@ -4615,7 +4877,20 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 const endX = (current.x + next.x) / 2;
                 const endY = (current.y + next.y) / 2;
                 
-                ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+                // Enhanced smoothing with catmull-rom style curves
+                const cpX1 = (current.x + previous.x) / 2;
+                const cpY1 = (current.y + previous.y) / 2;
+                const cpX2 = (current.x + next.x) / 2;
+                const cpY2 = (current.y + next.y) / 2;
+                
+                ctx.bezierCurveTo(
+                    previous.x + (current.x - previous.x) / 6,
+                    previous.y + (current.y - previous.y) / 6,
+                    current.x - (next.x - current.x) / 6,
+                    current.y - (next.y - current.y) / 6,
+                    current.x,
+                    current.y
+                );
             }
         }
         
@@ -4801,10 +5076,26 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 Object.keys(hourlyData).forEach(hour => allTimePoints.add(hour));
             });
 
-            // Sort time points and format them as dates in dd/mm/yy format
-            const sortedHours = Array.from(allTimePoints).sort((a, b) => parseInt(a) - parseInt(b));
-            const hours = this.formatTimePointsAsDateLabels(sortedHours, siteData[0], "date");
+            // Sort time points properly by converting to Date objects
+            const sortedHours = Array.from(allTimePoints).sort((a, b) => {
+                const dateA = new Date(a.replace(/\//g, "-"));
+                const dateB = new Date(b.replace(/\//g, "-"));
+                return dateA - dateB;
+            });
+            
+            // Format all dates uniformly as dd/mm/yy
+            const hours = sortedHours.map(timeStr => {
+                const date = new Date(timeStr.replace(/\//g, "-"));
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = String(date.getFullYear()).slice(-2);
+                return `${day}/${month}/${year}`;
+            });
             console.log(`Using ${hours.length} time points from actual data:`, hours.slice(0, 5), '...');
+            console.log("=== DEBUG: Site Comparison Time Range ===");
+            console.log("All time points found:", allTimePoints);
+            console.log("Sorted hours:", sortedHours.slice(0, 10));
+            console.log("Formatted hours:", hours.slice(0, 10));
 
             let maxDPM = 0;
             let maxStdDPM = 0;
@@ -4814,10 +5105,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 // Extract DPM data
                 const hourlyData = this.extractHourlyData(site.data, source);
                 const dpmValues = sortedHours.map(hour => {
-                    return hourlyData[hour] || 0;
+                console.log("=== DEBUG: Processing site", siteInfo.site, "===");
+                console.log("Hourly data keys:", Object.keys(hourlyData));
+                console.log("Sorted hours length:", sortedHours.length);
+                    return hourlyData[hour] !== undefined ? hourlyData[hour] : null;
+                    console.log("Hour", hour, "-> value:", hourlyData[hour], "mapped to:", hourlyData[hour] !== undefined ? hourlyData[hour] : null);
                 });
 
-                const maxSiteValue = Math.max(...dpmValues);
+                const validDpmValues = dpmValues.filter(v => v !== null); const maxSiteValue = validDpmValues.length > 0 ? Math.max(...validDpmValues) : 0;
                 maxDPM = Math.max(maxDPM, maxSiteValue);
 
                 // Check if this is a std file
@@ -4867,7 +5162,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                     // Recalculate max after scaling - find actual max from scaled data
                     let newMaxDPM = 0;
                     plotData.forEach(site => {
-                        const siteMax = Math.max(...site.dpmValues);
+                        const validSiteValues = site.dpmValues.filter(v => v !== null); const siteMax = validSiteValues.length > 0 ? Math.max(...validSiteValues) : 0;
                         newMaxDPM = Math.max(newMaxDPM, siteMax);
                     });
                     maxDPM = newMaxDPM;
@@ -5004,19 +5299,39 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 Object.keys(hourlyData).forEach(hour => allTimePoints.add(hour));
             });
 
-            // Sort time points and format them as dates in dd/mm/yy format
-            const sortedHours = Array.from(allTimePoints).sort((a, b) => parseInt(a) - parseInt(b));
-            const hours = this.formatTimePointsAsDateLabels(sortedHours, {data: siteData}, "date");
+            // Sort time points properly by converting to Date objects
+            const sortedHours = Array.from(allTimePoints).sort((a, b) => {
+                const dateA = new Date(a.replace(/\//g, "-"));
+                const dateB = new Date(b.replace(/\//g, "-"));
+                return dateA - dateB;
+            });
+            
+            // Format all dates uniformly as dd/mm/yy
+            const hours = sortedHours.map(timeStr => {
+                const date = new Date(timeStr.replace(/\//g, "-"));
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = String(date.getFullYear()).slice(-2);
+                return `${day}/${month}/${year}`;
+            });
             console.log(`Using ${hours.length} time points from actual data:`, hours.slice(0, 5), '...');
+            console.log("=== DEBUG: Site Comparison Time Range ===");
+            console.log("All time points found:", allTimePoints);
+            console.log("Sorted hours:", sortedHours.slice(0, 10));
+            console.log("Formatted hours:", hours.slice(0, 10));
 
             let maxDPM = 0;
 
             const plotData = sources.map((source, index) => {
                 const hourlyData = this.extractHourlyData(siteData, source);
                 const dpmValues = sortedHours.map(hour => {
-                    return hourlyData[hour] || 0;
+                console.log("=== DEBUG: Processing site", siteInfo.site, "===");
+                console.log("Hourly data keys:", Object.keys(hourlyData));
+                console.log("Sorted hours length:", sortedHours.length);
+                    return hourlyData[hour] !== undefined ? hourlyData[hour] : null;
+                    console.log("Hour", hour, "-> value:", hourlyData[hour], "mapped to:", hourlyData[hour] !== undefined ? hourlyData[hour] : null);
                 });
-                maxDPM = Math.max(maxDPM, ...dpmValues);
+                const validDpmValues = dpmValues.filter(v => v !== null); if (validDpmValues.length > 0) maxDPM = Math.max(maxDPM, ...validDpmValues);
                 
                 return {
                     source: source,
@@ -5059,6 +5374,125 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             
         } catch (error) {
             console.error('Error in std source comparison plot creation:', error);
+            outputDiv.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
+                    <p><strong>Plot creation failed:</strong> ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    // Length distribution comparison methods
+    async generateLengthDistributionFromFirstCard(site, lengthVars) {
+        console.log('=== GENERATE LENGTH DISTRIBUTION FROM FIRST CARD START ===');
+        console.log('Site:', site);
+        console.log('Length Variables:', lengthVars);
+
+        const outputDiv = document.getElementById('siteComparisonLengthOutput');
+        if (!outputDiv) {
+            console.error('Length distribution output div not found');
+            return;
+        }
+
+        outputDiv.classList.add('active');
+
+        // Show loading message
+        outputDiv.innerHTML = `
+            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
+                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Length Distribution Plot...</h4>
+                <p>Loading ${site} data for variables: ${lengthVars.join(', ')}</p>
+            </div>
+        `;
+
+        try {
+            console.log('Starting to load file for length distribution...');
+            // Load the CSV file using the same approach as Blade Count
+            const rawData = await this.loadLengthData(site);
+
+            console.log('Loaded length data for site:', site);
+            console.log('Raw data rows:', rawData.length);
+
+            if (!rawData || rawData.length === 0) {
+                throw new Error('No valid data found for the selected site');
+            }
+
+            // Create length distribution chart
+            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv);
+            console.log('Length distribution chart created successfully');
+
+        } catch (error) {
+            console.error('Error in length distribution chart creation:', error);
+            outputDiv.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
+                    <p><strong>Plot creation failed:</strong> ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    async generateLengthSiteComparison(lengthVar, sites) {
+        console.log('=== GENERATE LENGTH SITE COMPARISON START ===');
+        console.log('Length Variable:', lengthVar);
+        console.log('Sites:', sites);
+
+        // This method would be for comparing the same variable across multiple sites
+        // For now, redirect to the single-site comparison since we typically work with one file at a time
+        const outputDiv = document.getElementById('siteComparisonLengthOutput');
+        if (!outputDiv) {
+            console.error('Length site comparison output div not found');
+            return;
+        }
+
+        outputDiv.classList.add('active');
+        outputDiv.innerHTML = `
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px;">
+                <h4 style="color: #92400e; margin-bottom: 8px;">ℹ️ Note</h4>
+                <p>Site comparison functionality coming soon. For now, please use the second panel below to compare multiple length variables within a single file.</p>
+            </div>
+        `;
+    }
+
+    async generateLengthVariableComparison(site, lengthVars) {
+        console.log('=== GENERATE LENGTH VARIABLE COMPARISON START ===');
+        console.log('Site:', site);
+        console.log('Length Variables:', lengthVars);
+
+        const outputDiv = document.getElementById('variableComparisonLengthOutput');
+        if (!outputDiv) {
+            console.error('Length variable comparison output div not found');
+            return;
+        }
+
+        outputDiv.classList.add('active');
+
+        // Show loading message
+        outputDiv.innerHTML = `
+            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 15px; text-align: center;">
+                <h4 style="color: #0369a1; margin-bottom: 8px;">🔄 Generating Length Distribution Plot...</h4>
+                <p>Loading ${site} data for variables: ${lengthVars.join(', ')}</p>
+            </div>
+        `;
+
+        try {
+            console.log('Starting to load file for length distribution...');
+            // Load the CSV file using the same approach as Blade Count
+            const rawData = await this.loadLengthData(site);
+
+            console.log('Loaded length data for site:', site);
+            console.log('Raw data rows:', rawData.length);
+
+            if (!rawData || rawData.length === 0) {
+                throw new Error('No valid data found for the selected site');
+            }
+
+            // Create length distribution chart
+            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv);
+            console.log('Length distribution chart created successfully');
+
+        } catch (error) {
+            console.error('Error in length distribution chart creation:', error);
             outputDiv.innerHTML = `
                 <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
                     <h4 style="color: #dc2626; margin-bottom: 8px;">❌ Error</h4>
@@ -5148,7 +5582,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // X-axis title (positioned lower to avoid overlap with rotated tick labels)
         ctx.font = 'bold 14px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.fillText('Date', plotArea.left + plotArea.width / 2, plotArea.bottom + 70);
+        ctx.fillText('Date', plotArea.left + plotArea.width / 2, plotArea.bottom + 75);
 
         // Left Y-axis labels (DPM)
         ctx.textAlign = 'right';
@@ -5204,6 +5638,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         ctx.beginPath();
         let firstPoint = true;
+            console.log("=== DEBUG: Drawing series", col.header, "===");
+            console.log("Series color:", color, "isStdSeries:", isStdSeries);
+            console.log("Global min/max:", globalMin, globalMax, "Range:", range);
 
         dpmValues.forEach((dpm, index) => {
             const x = plotArea.left + (index + 0.5) * xStep;
@@ -5234,6 +5671,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         ctx.beginPath();
         let firstPoint = true;
+            console.log("=== DEBUG: Drawing series", col.header, "===");
+            console.log("Series color:", color, "isStdSeries:", isStdSeries);
+            console.log("Global min/max:", globalMin, globalMax, "Range:", range);
 
         detectionRateValues.forEach((detectionRate, index) => {
             const x = plotArea.left + (index + 0.5) * xStep;
@@ -5347,13 +5787,16 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         const updateParameterDropdown = () => {
             const selectedSource = dataSourceSelect.value;
-            if (selectedSource === "summary") {
+            const isIndivFile = selectedSource && (selectedSource.includes('Indiv') || selectedSource.includes('_indiv'));
+            const isSummaryFile = selectedSource && (selectedSource.includes('Summary') || selectedSource.includes('_summary'));
+
+            if (isSummaryFile && !isIndivFile) {
                 parameterSelect.disabled = true;
                 parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option>";
-                parameterHelpText.textContent = "Needs the Indiv file.";
+                parameterHelpText.textContent = "Summary files don't support blade count analysis. Please select an Indiv file.";
                 parameterHelpText.style.color = "#999";
                 generateBladeCountBtn.disabled = true;
-            } else if (selectedSource === "indiv" || selectedSource === "both") {
+            } else if (isIndivFile) {
                 parameterSelect.disabled = false;
                 parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option><option value=\"blade_count_by_size\">Blade count by size (small vs large)</option>";
                 parameterHelpText.textContent = "Select a parameter to analyze";
@@ -5371,7 +5814,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const updateGenerateButton = () => {
             const sourceSelected = dataSourceSelect.value;
             const parameterSelected = parameterSelect.value;
-            generateBladeCountBtn.disabled = !((sourceSelected === "indiv" || sourceSelected === "both") && parameterSelected === "blade_count_by_size");
+            const isIndivFile = sourceSelected && (sourceSelected.includes('Indiv') || sourceSelected.includes('_indiv'));
+            generateBladeCountBtn.disabled = !(isIndivFile && parameterSelected === "blade_count_by_size");
         };
 
         if (dataSourceSelect) dataSourceSelect.addEventListener("change", updateParameterDropdown);
@@ -5381,6 +5825,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 this.generateBladeCountChart();
             });
         }
+
+        // Initial population of dropdown
+        this.updateBladeCountDropdowns();
     }
 
     async generateBladeCountChart() {
@@ -5408,22 +5855,26 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 
     async loadBladeCountData() {
-        // First, check csvManager's loaded files
-        let individFile = null;
+        // Get the selected file from the data source dropdown
+        const dataSourceSelect = document.getElementById("dataSourceSelect");
+        const selectedFilename = dataSourceSelect ? dataSourceSelect.value : null;
+
+        if (!selectedFilename) {
+            throw new Error('Please select a data source from the dropdown first.');
+        }
+
+        // Find the selected file in loaded files
+        let selectedFile = null;
 
         if (csvManager && csvManager.workingDirFiles) {
-            individFile = csvManager.workingDirFiles.find(file =>
-                file.name.includes('Crop_ALGA_2503_Indiv.csv') ||
-                file.name.includes('Indiv.csv')
-            );
+            selectedFile = csvManager.workingDirFiles.find(file => file.name === selectedFilename);
         }
 
-        if (!individFile) {
-            // Show helpful error message about loading files
-            throw new Error('Please load the Crop_ALGA_2503_Indiv.csv file using the "Select CSV Files" button first.');
+        if (!selectedFile) {
+            throw new Error(`Please load the ${selectedFilename} file using the "Select CSV Files" button first.`);
         }
 
-        return this.parseCSVFile(individFile);
+        return this.parseCSVFile(selectedFile);
     }
 
     async parseCSVFile(file) {
@@ -5777,6 +6228,247 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 td.textContent = value;
                 td.style.border = '1px solid #ddd';
                 td.style.padding = '8px';
+                td.style.textAlign = 'center';
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        tableContainer.appendChild(table);
+        outputDiv.appendChild(tableContainer);
+    }
+
+    // Length distribution methods
+    async loadLengthData(filename) {
+        // First, check csvManager's loaded files
+        let lengthFile = null;
+
+        if (csvManager && csvManager.workingDirFiles) {
+            lengthFile = csvManager.workingDirFiles.find(file =>
+                file.name === filename || file.name.includes('Indiv.csv')
+            );
+        }
+
+        if (!lengthFile) {
+            throw new Error(`Please load the ${filename} file using the "Select CSV Files" button first.`);
+        }
+
+        return this.parseCSVFile(lengthFile);
+    }
+
+    renderLengthDistributionChart(rawData, lengthVars, outputDiv) {
+        console.log('=== RENDERING LENGTH DISTRIBUTION CHART ===');
+        console.log('Raw data rows:', rawData.length);
+        console.log('Length variables:', lengthVars);
+
+        // Extract length data for the selected variables
+        const lengthData = rawData.map(row => {
+            const result = {
+                date: row['Date'],
+                sampleID: row['sample ID'],
+                subset: row['subset']
+            };
+
+            lengthVars.forEach(variable => {
+                const value = parseFloat(row[variable]);
+                result[variable] = isNaN(value) ? 0 : value;
+            });
+
+            return result;
+        }).filter(row => row.date && row.sampleID); // Filter out rows with missing essential data
+
+        console.log('Processed length data rows:', lengthData.length);
+
+        if (lengthData.length === 0) {
+            outputDiv.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 6px; padding: 15px;">
+                    <h4 style="color: #dc2626; margin-bottom: 8px;">❌ No Data</h4>
+                    <p>No valid length data found for the selected variables.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Create chart container
+        const chartContainer = document.createElement('div');
+        chartContainer.style.marginTop = '20px';
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 500;
+        chartContainer.appendChild(canvas);
+
+        // Render the chart
+        this.drawLengthDistributionChart(canvas, lengthData, lengthVars);
+
+        // Clear loading message and add chart directly
+        outputDiv.innerHTML = '';
+        outputDiv.appendChild(chartContainer);
+
+        // Add summary table
+        this.addLengthSummaryTable(lengthData, lengthVars, outputDiv);
+    }
+
+    drawLengthDistributionChart(canvas, data, lengthVars) {
+        const ctx = canvas.getContext('2d');
+        const padding = 80;
+        const chartWidth = canvas.width - 2 * padding;
+        const chartHeight = canvas.height - 2 * padding;
+
+        // Clear canvas with light background
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Calculate statistics for each variable
+        const stats = lengthVars.map((variable, index) => {
+            const values = data.map(d => d[variable]).filter(v => v > 0);
+            const avg = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
+            const max = Math.max(...values, 0);
+            const min = Math.min(...values, 0);
+
+            return {
+                variable,
+                values,
+                avg,
+                max,
+                min,
+                count: values.length,
+                color: this.getLengthVariableColor(index)
+            };
+        });
+
+        // Find overall max for y-axis scaling
+        const overallMax = Math.max(...stats.map(s => s.max), 1);
+
+        // Draw axes
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+
+        // Y-axis
+        ctx.beginPath();
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, padding + chartHeight);
+        ctx.stroke();
+
+        // X-axis
+        ctx.beginPath();
+        ctx.moveTo(padding, padding + chartHeight);
+        ctx.lineTo(padding + chartWidth, padding + chartHeight);
+        ctx.stroke();
+
+        // Draw bars for each variable
+        const barWidth = chartWidth / (lengthVars.length * 1.5);
+        const barSpacing = barWidth * 0.3;
+
+        stats.forEach((stat, index) => {
+            const x = padding + (index * (barWidth + barSpacing)) + barSpacing/2;
+            const barHeight = (stat.avg / overallMax) * chartHeight;
+            const y = padding + chartHeight - barHeight;
+
+            // Draw bar
+            ctx.fillStyle = stat.color;
+            ctx.fillRect(x, y, barWidth, barHeight);
+
+            // Draw variable label
+            ctx.fillStyle = '#374151';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(stat.variable.replace('AV ', '').replace(' (cm)', ''), x + barWidth/2, padding + chartHeight + 25);
+
+            // Draw value on top of bar
+            ctx.fillStyle = '#1f2937';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillText(stat.avg.toFixed(1), x + barWidth/2, y - 5);
+        });
+
+        // Y-axis labels
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+
+        for (let i = 0; i <= 5; i++) {
+            const value = (overallMax * i / 5).toFixed(1);
+            const y = padding + chartHeight - (chartHeight * i / 5);
+            ctx.fillText(value, padding - 10, y + 4);
+        }
+
+        // Chart title
+        ctx.fillStyle = '#1f2937';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Average Length Distribution', canvas.width / 2, 30);
+
+        // Y-axis title
+        ctx.save();
+        ctx.translate(25, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Length (cm)', 0, 0);
+        ctx.restore();
+    }
+
+    getLengthVariableColor(index) {
+        const colors = [
+            '#3b82f6', // Blue
+            '#ef4444', // Red
+            '#10b981', // Green
+            '#f59e0b', // Yellow
+            '#8b5cf6', // Purple
+            '#06b6d4'  // Cyan
+        ];
+        return colors[index % colors.length];
+    }
+
+    addLengthSummaryTable(data, lengthVars, outputDiv) {
+        const tableContainer = document.createElement('div');
+        tableContainer.style.marginTop = '20px';
+
+        const tableTitle = document.createElement('h4');
+        tableTitle.textContent = 'Length Statistics Summary';
+        tableTitle.style.marginBottom = '10px';
+        tableTitle.style.color = '#374151';
+        tableContainer.appendChild(tableTitle);
+
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.backgroundColor = 'white';
+
+        // Header
+        const thead = document.createElement('thead');
+        thead.style.backgroundColor = '#f8fafc';
+        const headerRow = document.createElement('tr');
+        ['Variable', 'Average (cm)', 'Min (cm)', 'Max (cm)', 'Count'].forEach(text => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            th.style.border = '1px solid #e5e7eb';
+            th.style.padding = '12px';
+            th.style.textAlign = 'center';
+            th.style.fontWeight = '600';
+            th.style.color = '#374151';
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        lengthVars.forEach(variable => {
+            const values = data.map(d => d[variable]).filter(v => v > 0);
+            const avg = values.length > 0 ? (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(2) : 'N/A';
+            const min = values.length > 0 ? Math.min(...values).toFixed(2) : 'N/A';
+            const max = values.length > 0 ? Math.max(...values).toFixed(2) : 'N/A';
+            const count = values.length;
+
+            const row = document.createElement('tr');
+            [variable, avg, min, max, count].forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = value;
+                td.style.border = '1px solid #e5e7eb';
+                td.style.padding = '10px';
                 td.style.textAlign = 'center';
                 row.appendChild(td);
             });

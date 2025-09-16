@@ -10,7 +10,7 @@ class CROPSeaweedManager {
     }
 
     init() {
-        if (\!document.title.includes("CROPreport")) return;
+        if (!document.title.includes("CROPreport")) return;
         this.setupEventListeners();
         console.log("CROP Seaweed Manager Ready");
     }
@@ -53,7 +53,7 @@ class CROPSeaweedManager {
     }
 
     loadImage(file) {
-        if (\!file || \!file.type.startsWith("image/")) return;
+        if (!file || !file.type.startsWith("image/")) return;
         const reader = new FileReader();
         reader.onload = (e) => {
             const canvas = document.getElementById("morphologyCanvas");
@@ -89,7 +89,7 @@ class CROPSeaweedManager {
 
     renderPoint(x, y, label) {
         const overlay = document.getElementById("measurementOverlay");
-        if (\!overlay) return;
+        if (!overlay) return;
 
         const point = document.createElement("div");
         point.className = "measurement-point";
@@ -128,7 +128,7 @@ class CROPSeaweedManager {
     assessHealth() {
         this.healthMetrics.overall = Math.random() * 10;
         this.updateStats();
-        alert("🌊 Health Assessment Complete\!\nOverall Score: " + this.healthMetrics.overall.toFixed(1) + "/10");
+        alert("🌊 Health Assessment Complete!\nOverall Score: " + this.healthMetrics.overall.toFixed(1) + "/10");
     }
 
     toggleTimeline() {

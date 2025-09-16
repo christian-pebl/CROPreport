@@ -168,9 +168,6 @@
                                         <label for="dataSourceSelect">Data Source:</label>
                                         <select id="dataSourceSelect" class="form-control">
                                             <option value="">Select data source...</option>
-                                            <option value="indiv">Indiv (Crop_ALGA_2503_Indiv.csv)</option>
-                                            <option value="summary">Summary (Crop_ALGA_2503_Summary.csv)</option>
-                                            <option value="both">Both (use Indiv for this chart)</option>
                                         </select>
                                         <small class="help-text">Choose data source for analysis</small>
                                     </div>
@@ -192,6 +189,82 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Distribution of lengths Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Distribution of lengths</h2>
+                    </div>
+
+                    <div class="comparison-container">
+                        <!-- Compare sites for specified length variable -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>1. Length distribution constant file, comparing variables</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="sitesSelectLength1">Select File:</label>
+                                        <select id="sitesSelectLength1" class="form-control">
+                                            <option value="">Select a CSV file...</option>
+                                        </select>
+                                        <small class="help-text">Choose one CSV file to analyze</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lengthSelect1">Select Length Variables:</label>
+                                        <select id="lengthSelect1" class="form-control" multiple>
+                                            <option value="AV sml_l (cm)">AV sml_l (cm)</option>
+                                            <option value="AV lrg_l (cm)">AV lrg_l (cm)</option>
+                                            <option value="AV all_l (cm)">AV all_l (cm)</option>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple length variables</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateSiteComparisonLengthBtn" class="btn-primary" disabled>
+                                        Generate Variable Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="siteComparisonLengthOutput" class="output-area"></div>
+                            </div>
+                        </div>
+
+                        <!-- Compare length variables for specified site -->
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>2. Length distribution constant site, comparing variables</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="siteSelectLength2">Select File:</label>
+                                        <select id="siteSelectLength2" class="form-control">
+                                            <option value="">Select a CSV file...</option>
+                                        </select>
+                                        <small class="help-text">Choose one CSV file to analyze</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lengthVarsSelect2">Select Length Variables:</label>
+                                        <select id="lengthVarsSelect2" class="form-control" multiple>
+                                            <option value="AV sml_l (cm)">AV sml_l (cm)</option>
+                                            <option value="AV lrg_l (cm)">AV lrg_l (cm)</option>
+                                            <option value="AV all_l (cm)">AV all_l (cm)</option>
+                                        </select>
+                                        <small class="help-text">Hold Ctrl/Cmd to select multiple length variables</small>
+                                    </div>
+                                </div>
+                                <div class="button-row">
+                                    <button id="generateVariableComparisonLengthBtn" class="btn-primary" disabled>
+                                        Generate Variable Comparison Plot
+                                    </button>
+                                </div>
+                                <div id="variableComparisonLengthOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- 24 Hour Average DPM Section -->
