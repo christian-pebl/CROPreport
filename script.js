@@ -5559,8 +5559,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Create canvas for chart
         const canvas = document.createElement('canvas');
-        canvas.width = 800;
-        canvas.height = 500;
+        canvas.width = 480;
+        canvas.height = 300;
         canvas.style.border = '1px solid #ddd';
         canvas.style.borderRadius = '4px';
         canvas.style.backgroundColor = '#ffffff';
@@ -5584,39 +5584,68 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Draw the chart
         this.drawStackedBarChart(canvas, data);
-
-        // Add summary table
-        this.addBladeCountSummaryTable(data, outputDiv);
     }
 
     drawStackedBarChart(canvas, data) {
         const ctx = canvas.getContext('2d');
-        const padding = 60;
+        const padding = 80;
         const chartWidth = canvas.width - 2 * padding;
         const chartHeight = canvas.height - 2 * padding;
 
-        // Clear canvas
+        // Clear canvas with white background
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add chart title - left aligned above plot area
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Number of blades sampled by station', padding, 50);
 
         if (data.length === 0) {
             ctx.fillStyle = '#666';
-            ctx.font = '16px Arial';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
             return;
         }
 
-        // Calculate max value for scaling
-        const maxValue = Math.max(...data.map(d => d.total));
+        // Calculate max value for scaling with 10% buffer
+        const maxDataValue = Math.max(...data.map(d => d.total));
+        const maxValue = maxDataValue * 1.1;  // Add 10% buffer
         const yScale = chartHeight / maxValue;
-        const barWidth = chartWidth / data.length * 0.8;
-        const barSpacing = chartWidth / data.length * 0.2;
+        const barWidth = chartWidth / data.length * 0.7;
+        const barSpacing = chartWidth / data.length * 0.3;
 
-        // Colors
-        const smallColor = '#4CAF50';
-        const largeColor = '#2196F3';
+        // Modern color scheme matching reference image
+        const smallColor = '#1f77b4';  // Blue similar to reference
+        const largeColor = '#ff7f0e';  // Orange similar to reference
+
+        // Draw gridlines first (behind bars) - horizontal and vertical
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 4]);
+
+        // Horizontal gridlines
+        for (let i = 1; i <= 5; i++) {
+            const y = canvas.height - padding - (chartHeight / 5) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(canvas.width - padding, y);
+            ctx.stroke();
+        }
+
+        // Vertical gridlines
+        data.forEach((station, index) => {
+            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2 + barWidth / 2;
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, canvas.height - padding);
+            ctx.stroke();
+        });
+
+        ctx.setLineDash([]);
 
         // Draw bars
         data.forEach((station, index) => {
@@ -5633,68 +5662,81 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             ctx.fillRect(x, canvas.height - padding - smallHeight - largeHeight, barWidth, largeHeight);
 
             // Station label
-            ctx.fillStyle = '#333';
-            ctx.font = '12px Arial';
+            ctx.fillStyle = '#666';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'center';
             ctx.save();
-            ctx.translate(x + barWidth / 2, canvas.height - padding + 15);
+            ctx.translate(x + barWidth / 2, canvas.height - padding + 25);
             ctx.rotate(-Math.PI / 4);
             ctx.fillText(station.station, 0, 0);
             ctx.restore();
         });
 
-        // Draw axes
-        ctx.strokeStyle = '#333';
+        // Draw axes - complete rectangle around plot area
+        ctx.strokeStyle = '#ccc';
         ctx.lineWidth = 1;
         ctx.beginPath();
+        // Left axis
         ctx.moveTo(padding, padding);
         ctx.lineTo(padding, canvas.height - padding);
+        // Bottom axis
         ctx.lineTo(canvas.width - padding, canvas.height - padding);
+        // Right axis
+        ctx.lineTo(canvas.width - padding, padding);
+        // Top axis
+        ctx.lineTo(padding, padding);
         ctx.stroke();
 
-        // Y-axis labels
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
+        // Y-axis labels with modern typography
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'right';
         for (let i = 0; i <= 5; i++) {
             const value = (maxValue / 5) * i;
             const y = canvas.height - padding - (chartHeight / 5) * i;
-            ctx.fillText(Math.round(value), padding - 10, y + 4);
+            ctx.fillText(Math.round(value), padding - 15, y + 4);
 
-            // Grid lines
-            if (i > 0) {
-                ctx.strokeStyle = '#eee';
-                ctx.beginPath();
-                ctx.moveTo(padding, y);
-                ctx.lineTo(canvas.width - padding, y);
-                ctx.stroke();
-            }
         }
 
-        // Legend
-        const legendY = 30;
+        // Modern legend with clean styling - top left position
+        const legendY = padding + 15;
+        const legendX = padding + 15;
+        const legendWidth = 120;
+        const legendHeight = 45;
+        const legendPadding = 6;
+
+        // Draw semi-transparent legend background with softer styling
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillRect(legendX - legendPadding, legendY - legendPadding, legendWidth, legendHeight);
+
+        // Draw subtle legend border
+        ctx.strokeStyle = 'rgba(220, 220, 220, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(legendX - legendPadding, legendY - legendPadding, legendWidth, legendHeight);
+
+        // Draw legend items with modern styling
         ctx.fillStyle = smallColor;
-        ctx.fillRect(canvas.width - 150, legendY, 15, 15);
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
+        ctx.fillRect(legendX, legendY, 12, 12);
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('Small blades', canvas.width - 130, legendY + 12);
+        ctx.fillText('Small blades', legendX + 18, legendY + 9);
 
         ctx.fillStyle = largeColor;
-        ctx.fillRect(canvas.width - 150, legendY + 25, 15, 15);
-        ctx.fillStyle = '#333';
-        ctx.fillText('Large blades', canvas.width - 130, legendY + 37);
+        ctx.fillRect(legendX, legendY + 22, 12, 12);
+        ctx.fillStyle = '#555';
+        ctx.fillText('Large blades', legendX + 18, legendY + 31);
 
-        // Axis labels
-        ctx.fillStyle = '#333';
-        ctx.font = '14px Arial';
+        // Modern axis labels - closer to axes
+        ctx.fillStyle = '#555';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Station', canvas.width / 2, canvas.height - 10);
+        ctx.fillText('Station', canvas.width / 2, canvas.height - padding + 45);
 
         ctx.save();
-        ctx.translate(15, canvas.height / 2);
+        ctx.translate(35, canvas.height / 2);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText('Blade Count', 0, 0);
+        ctx.fillText('Number of blade samples', 0, 0);
         ctx.restore();
     }
 
@@ -5753,7 +5795,7 @@ let navigationManager;
 document.addEventListener('DOMContentLoaded', () => {
     csvManager = new CSVManager();
     navigationManager = new NavigationManager();
-    
+
     // Hook into csvManager's file loading to update plot page
     const originalUpdateFileBrowser = csvManager.updateFileBrowser;
     csvManager.updateFileBrowser = function(files) {
@@ -5764,4 +5806,5 @@ document.addEventListener('DOMContentLoaded', () => {
             navigationManager.updatePlotPageFileInfo().catch(console.error);
         }
     };
+
 });
