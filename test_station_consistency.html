@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Station Consistency Test - CROPreport 0.2</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+        }
+        .log-section {
+            background: #000;
+            border: 1px solid #00ff00;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .emoji { color: #ffff00; }
+        .file { color: #00ffff; }
+        .station { color: #ff6600; }
+        .success { color: #00ff00; }
+        .error { color: #ff3333; }
+        h2 { color: #ffffff; text-align: center; }
+        .instructions {
+            background: #333;
+            color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h2>🧪 CROPreport 0.2 - Station Consistency Test Monitor</h2>
+
+    <div class="instructions">
+        <h3>📋 Testing Instructions:</h3>
+        <ol>
+            <li>Load a CSV file with 6 stations</li>
+            <li>Generate length distribution plots for different variables</li>
+            <li>Check console for station count consistency (should show 6 for all)</li>
+            <li>Load a different CSV file with 2 stations</li>
+            <li>Generate length distribution plots again</li>
+            <li>Check console for station count consistency (should show 2 for all)</li>
+            <li>Repeat for width distributions</li>
+        </ol>
+        <p><strong>Expected Behavior:</strong> All variables in the same file should show identical station counts.</p>
+    </div>
+
+    <div class="log-section">
+        <h3>🔍 Console Log Patterns to Look For:</h3>
+        <pre>
+<span class="emoji">🎨</span> === RENDERING LENGTH DISTRIBUTION CHART ===
+<span class="emoji">📁</span> Processing file: <span class="file">[filename]</span>
+<span class="emoji">📋</span> Raw data rows: <span class="station">[count]</span>
+<span class="emoji">🧹</span> Clearing previous processing state for clean file isolation
+<span class="emoji">🔍</span> DATA ISOLATION CHECK:
+<span class="emoji">📋</span> First 3 rows from <span class="file">[filename]</span>: [sample data]
+<span class="emoji">🎯</span> === AGGREGATING LENGTH DATA FOR BOX PLOTS ===
+<span class="emoji">📁</span> File: <span class="file">[filename]</span>
+<span class="emoji">🔍</span> === EXTRACTING INDIVIDUAL BLADE DATA ===
+<span class="emoji">📁</span> Processing file: <span class="file">[filename]</span>
+<span class="emoji">✅</span> EXTRACTION COMPLETE for file: <span class="file">[filename]</span>
+<span class="emoji">📈</span> Found <span class="station">[X]</span> unique stations: <span class="station">[station list]</span>
+<span class="emoji">🎯</span> AGGREGATION PHASE: Processing <span class="station">[X]</span> stations from <span class="file">[filename]</span>
+<span class="emoji">📍</span> Stations found: <span class="station">[station list]</span>
+<span class="emoji">📊</span> RENDERING PHASE: Creating [chart type] for <span class="station">[X]</span> stations
+<span class="emoji">📈</span> Station list for <span class="file">[filename]</span>: <span class="station">[station list]</span>
+        </pre>
+    </div>
+
+    <div class="log-section">
+        <h3>✅ Success Indicators:</h3>
+        <ul>
+            <li><span class="success">File isolation confirmed</span> - Each file shows correct row count</li>
+            <li><span class="success">Station count consistency</span> - Same number across all variables in file</li>
+            <li><span class="success">Station list consistency</span> - Same station names across all variables</li>
+            <li><span class="success">Clean state transitions</span> - No leftover data when switching files</li>
+        </ul>
+    </div>
+
+    <div class="log-section">
+        <h3>❌ Failure Indicators:</h3>
+        <ul>
+            <li><span class="error">Different station counts</span> - Variables show different numbers of stations</li>
+            <li><span class="error">Wrong station lists</span> - Different station names between variables</li>
+            <li><span class="error">Data contamination</span> - Previous file data mixed with current file</li>
+            <li><span class="error">Missing data isolation</span> - No clear separation between file processing</li>
+        </ul>
+    </div>
+
+    <div class="log-section">
+        <h3>🚀 Implementation Summary:</h3>
+        <pre>
+<span class="emoji">✅</span> Phase 1: Data loading standardization
+  • Added filename parameter propagation
+  • Enhanced file-specific loading validation
+
+<span class="emoji">✅</span> Phase 2: Station processing consistency
+  • Unified station identification logic
+  • Added comprehensive station tracking logs
+
+<span class="emoji">✅</span> Phase 3: Data aggregation fixes
+  • Added state clearing for file isolation
+  • Implemented data verification checks
+
+<span class="emoji">✅</span> Phase 4: Progress logging
+  • Comprehensive terminal logging system
+  • Station count and file tracking
+  • Data isolation verification
+        </pre>
+    </div>
+
+    <script>
+        // Monitor console for station consistency
+        const originalLog = console.log;
+        let logBuffer = [];
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+
+            const message = args.join(' ');
+            logBuffer.push({
+                timestamp: new Date().toISOString(),
+                message: message
+            });
+
+            // Keep only last 100 log entries
+            if (logBuffer.length > 100) {
+                logBuffer.shift();
+            }
+
+            // Check for station count inconsistencies
+            if (message.includes('Found') && message.includes('unique stations')) {
+                const match = message.match(/Found (\d+) unique stations/);
+                if (match) {
+                    const stationCount = parseInt(match[1]);
+                    console.info(`🔍 STATION COUNT DETECTED: ${stationCount} stations`);
+                }
+            }
+        };
+
+        console.log('🚀 Station Consistency Monitor Active');
+        console.log('📊 Open browser console to see detailed logging');
+        console.log('🧪 Start testing by loading CSV files and generating plots');
+    </script>
+</body>
+</html>

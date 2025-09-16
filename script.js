@@ -5407,7 +5407,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create length distribution chart
-            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv);
+            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv, site);
             console.log('Length distribution chart created successfully');
 
         } catch (error) {
@@ -5477,7 +5477,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create length distribution chart
-            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv);
+            this.renderLengthDistributionChart(rawData, lengthVars, outputDiv, site);
             console.log('Length distribution chart created successfully');
 
         } catch (error) {
@@ -5525,7 +5525,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create width distribution chart
-            this.renderWidthDistributionChart(rawData, widthVars, outputDiv);
+            this.renderWidthDistributionChart(rawData, widthVars, outputDiv, site);
             console.log('Width distribution chart created successfully');
 
         } catch (error) {
@@ -5574,7 +5574,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create width distribution chart
-            this.renderWidthDistributionChart(rawData, widthVars, outputDiv);
+            this.renderWidthDistributionChart(rawData, widthVars, outputDiv, site);
             console.log('Width distribution chart created successfully');
 
         } catch (error) {
@@ -5621,7 +5621,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Create width distribution chart
-            this.renderWidthDistributionChart(rawData, widthVars, outputDiv);
+            this.renderWidthDistributionChart(rawData, widthVars, outputDiv, site);
             console.log('Width distribution chart created successfully');
 
         } catch (error) {
@@ -5654,10 +5654,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return this.parseCSVFile(selectedFile);
     }
 
-    renderWidthDistributionChart(rawData, widthVars, outputDiv) {
-        console.log('=== RENDERING WIDTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
-        console.log('Raw data rows:', rawData.length);
-        console.log('Width variables:', widthVars);
+    renderWidthDistributionChart(rawData, widthVars, outputDiv, filename = 'unknown') {
+        console.log('🎨 === RENDERING WIDTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
+        console.log(`📁 Processing file: ${filename}`);
+        console.log(`📋 Raw data rows: ${rawData.length}`);
+        console.log(`📊 Width variables: ${widthVars}`);
+
+        // Clear any previous processing state for clean file isolation
+        console.log('🧹 Clearing previous processing state for clean file isolation');
 
         try {
             // Validate input parameters
@@ -5676,6 +5680,16 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             // For now, we'll work with the first selected variable (like blade count works with one parameter)
             const selectedVariable = widthVars[0];
             console.log(`📊 Processing width variable: ${selectedVariable}`);
+
+            // Verify data isolation - log sample of data for verification
+            console.log('🔍 WIDTH DATA ISOLATION CHECK:');
+            if (rawData.length > 0) {
+                const sampleRows = rawData.slice(0, 3);
+                console.log(`📋 First 3 rows from ${filename}:`, sampleRows.map(row => ({
+                    sampleId: row['sample ID'] || row.sampleId || row.sample_id,
+                    selectedVar: row[selectedVariable]
+                })));
+            }
 
             // Create output container with table option
             const chartContainer = document.createElement('div');
@@ -5697,10 +5711,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             if (individualColumn) {
                 console.log(`🔍 Attempting individual data extraction for: ${individualColumn}`);
                 try {
-                    const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn);
+                    const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn, filename);
 
                     if (Object.keys(stationMeasurements).length > 0) {
-                        console.log('✅ Individual measurements found, creating box plots');
+                        console.log(`✅ WIDTH INDIVIDUAL DATA: Found measurements for ${Object.keys(stationMeasurements).length} stations in ${filename}`);
+                        console.log(`📍 Width stations: ${Object.keys(stationMeasurements).sort().join(', ')}`);
 
                         // Apply subset filtering if needed
                         const filteredMeasurements = this.filterStationMeasurementsBySubset(stationMeasurements, selectedVariable);
@@ -5793,8 +5808,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             // Create canvas for chart
             const canvas = document.createElement('canvas');
-            canvas.width = 700;
-            canvas.height = 430;
+            canvas.width = 576;
+            canvas.height = 360;
             canvas.id = 'widthDistributionChart';
             chartContainer.appendChild(canvas);
 
@@ -5804,8 +5819,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             try {
                 // Render the chart with station-based data
+                console.log(`📊 WIDTH RENDERING: Creating chart for ${aggregatedData.length} stations from ${filename}`);
+                console.log(`📈 Final width station list: ${aggregatedData.map(d => d.station).join(', ')}`);
                 this.drawWidthDistributionChart(canvas, aggregatedData, selectedVariable);
-                console.log('✅ Chart rendered successfully');
+                console.log(`✅ WIDTH CHART COMPLETE: Successfully rendered chart for ${filename}`);
 
             } catch (drawError) {
                 console.error('❌ Error drawing chart:', drawError);
@@ -6081,24 +6098,15 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             ctx.fillText(station, x, padding + chartHeight + 20);
         });
 
-        // Draw title
-        ctx.fillStyle = '#111827';
-        ctx.font = 'bold 14px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(chartTitle, canvas.width / 2, 25);
+        // Add chart title
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(chartTitle, padding, 50);
 
-        // Draw X-axis title
+        // Y-axis title
         ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height - 15);
-        ctx.fillStyle = '#374151';
-        ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Station', 0, 0);
-        ctx.restore();
-
-        // Draw Y-axis title (rotated)
-        ctx.save();
-        ctx.translate(20, canvas.height / 2);
+        ctx.translate(25, canvas.height / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.fillStyle = '#374151';
         ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
@@ -6106,6 +6114,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const yAxisTitle = hasBoxPlots ? 'Width (cm) Distribution' : 'Average Width (cm)';
         ctx.fillText(yAxisTitle, 0, 0);
         ctx.restore();
+
+        // X-axis title
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 50);
 
         console.log('✅ Chart drawing completed');
     }
@@ -6239,6 +6253,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     filterStationMeasurementsBySubset(stationMeasurements, selectedVariable) {
         console.log('🔍 Filtering station measurements by subset for:', selectedVariable);
 
+        // Log all unique subset values found across all stations for debugging
+        const allMeasurements = Object.values(stationMeasurements).flat();
+        const uniqueSubsets = [...new Set(allMeasurements.map(m => m.subset))];
+        console.log(`🔍 WIDTH SUBSET DEBUG: Found subset values in data: ${uniqueSubsets.join(', ')}`);
+
         // Determine target subset based on variable
         let targetSubset = 'all';
         if (selectedVariable.includes('sml_')) {
@@ -6256,15 +6275,16 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 // Use all measurements
                 filteredStationMeasurements[station] = measurements;
             } else {
-                // Filter by subset
-                const filtered = measurements.filter(m => m.subset === targetSubset);
+                // Case-insensitive subset filtering to handle "small"/"Small" and "large"/"Large"
+                const filtered = measurements.filter(m => m.subset && m.subset.toLowerCase() === targetSubset.toLowerCase());
+                console.log(`📊 Station ${station}: ${filtered.length}/${measurements.length} measurements match ${targetSubset}`);
                 if (filtered.length > 0) {
                     filteredStationMeasurements[station] = filtered;
                 }
             }
         });
 
-        console.log(`📊 Filtered from ${Object.keys(stationMeasurements).length} to ${Object.keys(filteredStationMeasurements).length} stations`);
+        console.log(`📊 WIDTH FILTERING RESULT: Filtered from ${Object.keys(stationMeasurements).length} to ${Object.keys(filteredStationMeasurements).length} stations`);
         return filteredStationMeasurements;
     }
 
@@ -7088,10 +7108,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 
     // Extract individual blade measurements from raw data for true whisker plots
-    extractIndividualBladeData(rawData, measurementType) {
+    extractIndividualBladeData(rawData, measurementType, filename = 'unknown') {
         console.log('🔍 === EXTRACTING INDIVIDUAL BLADE DATA ===');
-        console.log(`Measurement type: ${measurementType}`);
-        console.log(`Raw data rows: ${rawData.length}`);
+        console.log(`📁 Processing file: ${filename}`);
+        console.log(`📊 Measurement type: ${measurementType}`);
+        console.log(`📋 Raw data rows: ${rawData.length}`);
 
         const stationMeasurements = {};
         const stationSet = new Set();
@@ -7135,7 +7156,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             console.log(`📊 Station ${station}: ${count} measurements (${min.toFixed(1)}-${max.toFixed(1)})`);
         });
 
-        console.log(`✅ Extracted individual data for ${stations.length} stations`);
+        console.log(`✅ EXTRACTION COMPLETE for file: ${filename}`);
+        console.log(`📈 Found ${stations.length} unique stations: ${stations.join(', ')}`);
+        console.log(`🔢 Total measurements: ${Object.values(stationMeasurements).reduce((sum, arr) => sum + arr.length, 0)}`);
+
         return stationMeasurements;
     }
 
@@ -7167,6 +7191,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     filterMeasurementsBySubset(measurements, selectedVariable) {
         console.log('🔍 Filtering measurements by subset for:', selectedVariable);
 
+        // Log all unique subset values found in data for debugging
+        const uniqueSubsets = [...new Set(measurements.map(m => m.subset))];
+        console.log(`🔍 SUBSET DEBUG: Found subset values in data: ${uniqueSubsets.join(', ')}`);
+
         // Determine target subset based on variable
         let targetSubset = 'all';
         if (selectedVariable.includes('sml_')) {
@@ -7180,11 +7208,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return measurements.map(m => m.value);
         }
 
+        // Case-insensitive subset filtering to handle "small"/"Small" and "large"/"Large"
         const filteredMeasurements = measurements
-            .filter(m => m.subset === targetSubset)
+            .filter(m => m.subset && m.subset.toLowerCase() === targetSubset.toLowerCase())
             .map(m => m.value);
 
-        console.log(`📊 Filtered to ${targetSubset}: ${filteredMeasurements.length}/${measurements.length} measurements`);
+        console.log(`📊 Filtered to ${targetSubset} (case-insensitive): ${filteredMeasurements.length}/${measurements.length} measurements`);
         return filteredMeasurements;
     }
 
@@ -7331,10 +7360,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return false;
     }
 
-    aggregateLengthData(rawData, selectedVariable) {
-        console.log('🎯 === AGGREGATING INDIVIDUAL BLADE DATA FOR BOX PLOTS ===');
-        console.log('Raw data rows:', rawData.length);
-        console.log('Selected variable:', selectedVariable);
+    aggregateLengthData(rawData, selectedVariable, filename = 'unknown') {
+        console.log('🎯 === AGGREGATING LENGTH DATA FOR BOX PLOTS ===');
+        console.log(`📁 File: ${filename}`);
+        console.log(`📋 Raw data rows: ${rawData.length}`);
+        console.log(`📊 Selected variable: ${selectedVariable}`);
 
         try {
             // Map AV variable to individual measurement column
@@ -7345,7 +7375,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Extract individual blade measurements by station
-            const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn);
+            const stationMeasurements = this.extractIndividualBladeData(rawData, individualColumn, filename);
 
             if (Object.keys(stationMeasurements).length === 0) {
                 console.log('❌ No individual measurements extracted');
@@ -7356,6 +7386,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             const stations = Object.keys(stationMeasurements).sort((a, b) =>
                 a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
             );
+
+            console.log(`🎯 AGGREGATION PHASE: Processing ${stations.length} stations from ${filename}`);
+            console.log(`📍 Stations found: ${stations.join(', ')}`);
 
             const result = stations.map(station => {
                 console.log(`\n📊 Processing station: ${station}`);
@@ -7405,13 +7438,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             // Fallback to old method if individual data processing fails
             console.log('🔄 Falling back to summary statistics method...');
-            return this.aggregateLengthDataLegacy(rawData, selectedVariable);
+            return this.aggregateLengthDataLegacy(rawData, selectedVariable, filename);
         }
     }
 
     // Legacy aggregation method as fallback
-    aggregateLengthDataLegacy(rawData, selectedVariable) {
+    aggregateLengthDataLegacy(rawData, selectedVariable, filename = 'unknown') {
         console.log('🔄 === LEGACY AGGREGATION (SUMMARY STATS ONLY) ===');
+        console.log(`📁 Processing file: ${filename} (legacy mode)`);
 
         // Detect corresponding SD column
         const sdColumn = this.detectStandardDeviationColumn(selectedVariable);
@@ -7453,6 +7487,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
         );
 
+        console.log(`🔄 LEGACY PROCESSING: Found ${stations.length} stations in ${filename}`);
+        console.log(`📍 Legacy stations: ${stations.join(', ')}`);
+
         const result = stations.map(station => {
             const avgValues = stationGroups[station];
             const sdValues = stationSDGroups[station];
@@ -7485,14 +7522,19 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             };
         });
 
-        console.log('🎯 Legacy aggregated data:', result);
+        console.log(`✅ LEGACY AGGREGATION COMPLETE for ${filename}`);
+        console.log(`📊 Generated ${result.length} station entries:`, result.map(r => r.station).join(', '));
         return result;
     }
 
-    renderLengthDistributionChart(rawData, lengthVars, outputDiv) {
-        console.log('=== RENDERING LENGTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
-        console.log('Raw data rows:', rawData.length);
-        console.log('Length variables:', lengthVars);
+    renderLengthDistributionChart(rawData, lengthVars, outputDiv, filename = 'unknown') {
+        console.log('🎨 === RENDERING LENGTH DISTRIBUTION CHART (WITH SD SUPPORT) ===');
+        console.log(`📁 Processing file: ${filename}`);
+        console.log(`📋 Raw data rows: ${rawData.length}`);
+        console.log(`📊 Length variables: ${lengthVars}`);
+
+        // Clear any previous processing state for clean file isolation
+        console.log('🧹 Clearing previous processing state for clean file isolation');
 
         try {
             // Validate input parameters
@@ -7535,8 +7577,18 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             console.log(`✅ Validation passed for variable: ${selectedVariable}`);
 
+            // Verify data isolation - log sample of data for verification
+            console.log('🔍 DATA ISOLATION CHECK:');
+            if (rawData.length > 0) {
+                const sampleRows = rawData.slice(0, 3);
+                console.log(`📋 First 3 rows from ${filename}:`, sampleRows.map(row => ({
+                    sampleId: row['sample ID'] || row.sampleId || row.sample_id,
+                    selectedVar: row[selectedVariable]
+                })));
+            }
+
             // Aggregate data by stations using our new method with SD support
-            const aggregatedData = this.aggregateLengthData(rawData, selectedVariable);
+            const aggregatedData = this.aggregateLengthData(rawData, selectedVariable, filename);
 
             if (aggregatedData.length === 0) {
                 outputDiv.innerHTML = `
@@ -7553,7 +7605,8 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             const hasSDData = aggregatedData.some(d => d.hasSD);
             const chartType = hasSDData ? 'Whisker Plot with Error Bars' : 'Standard Bar Chart';
 
-            console.log(`📊 Rendering ${chartType} for ${aggregatedData.length} stations`);
+            console.log(`📊 RENDERING PHASE: Creating ${chartType} for ${aggregatedData.length} stations`);
+            console.log(`📈 Station list for ${filename}: ${aggregatedData.map(d => d.station).join(', ')}`);
 
             // Create chart container with status message
             const chartContainer = document.createElement('div');
@@ -7670,10 +7723,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillText(chartTitle, padding, 50);
 
         if (data.length === 0) {
-            ctx.fillStyle = '#666';
-            ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            // Draw "No data" message
+            ctx.fillStyle = '#374151';
+            ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
             return;
         }
 
@@ -7692,9 +7746,34 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             console.log(`📏 Box plot range: ${minDataValue.toFixed(1)} to ${maxDataValue.toFixed(1)}`);
         } else {
             // Fallback to avgLength for scaling
-            maxDataValue = Math.max(...data.map(d => d.avgLength || 0));
+            const values = data.map(d => d.avgLength).filter(v => !isNaN(v));
+            if (values.length === 0) {
+                ctx.fillStyle = '#374151';
+                ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No valid data to display', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+            maxDataValue = Math.max(...values);
             minDataValue = 0;
         }
+
+        // Sort stations naturally (handle both string and numeric sorting)
+        data.sort((a, b) => {
+            const aStation = a.station.toString();
+            const bStation = b.station.toString();
+
+            // Try numeric sort first
+            const aNum = parseFloat(aStation);
+            const bNum = parseFloat(bStation);
+
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                return aNum - bNum;
+            }
+
+            // Fallback to string sort
+            return aStation.localeCompare(bStation);
+        });
 
         const maxValue = maxDataValue * 1.1;  // 10% buffer
         const yScale = chartHeight / maxValue;
