@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CROPreport 0.1 - CSV Manager</title>
+    <title>CROPreport 0.3 - CSV Manager</title>
     <link rel="stylesheet" href="styles.css">
     <script src="seaweed-manager.js" defer></script>
 </head>
@@ -38,33 +38,20 @@
     <nav class="top-banner">
         <div class="banner-content">
             <div class="banner-left">
-                <h1 class="banner-title">CROPreport 0.1</h1>
+                <h1 class="banner-title">CROPreport 0.3</h1>
             </div>
             <div class="banner-right">
-                <button id="seaweedToggleBtn" class="seaweed-btn" style="margin-right: 15px;">🌊 Seaweed Analysis</button>
-                <div class="device-navigation">
-                    <div class="fpod-container">
-                        <div class="mode-slider-container">
-                            <div class="device-label">CROP</div>
-                            <div class="slider-track">
-                                <div class="slider-thumb"></div>
-                            </div>
-                            <div class="slider-icons">
-                                <button class="slider-icon" data-page="reformat" data-device="fpod" title="Load Data">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 3v12l-4-4m4 4l4-4"/>
-                                        <path d="M8 21h8"/>
-                                    </svg>
-                                </button>
-                                <button class="slider-icon" data-page="plot" data-device="fpod" title="Plot Data">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="22,6 13.5,15.5 8.5,10.5 2,17"/>
-                                        <polyline points="13,6 22,6 22,15"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="nav-buttons">
+                    <button id="loadPageBtn" class="nav-btn" data-page="reformat" title="Load Data">
+                        📄 Load
+                    </button>
+                    <button id="plotPageBtn" class="nav-btn" data-page="plot" title="Plot Data">
+                        📊 Plot
+                    </button>
+                    <button id="mergePageBtn" class="nav-btn" title="Merge Files">
+                        🔄 Merge
+                    </button>
+                </div>
                 </div>
             </div>
         </div>
@@ -86,7 +73,7 @@
                         <span id="fileCount"></span>
                         <div class="control-buttons">
                             <button id="addFileBtn" class="btn-secondary">+ Add File</button>
-                            <button id="changeWorkingDirBtn" class="btn-secondary">Load Different Files</button>
+                            <button id="changeWorkingDirBtn" class="btn-secondary">Load Different Files</button>                            <button id="mergeSelectedBtn" class="btn-primary hidden">🔄 Merge Selected</button>
                         </div>
                     </div>
                 </div>
@@ -337,6 +324,73 @@
             </main>
         </div> <!-- End plotPage -->
 
+        <!-- Merge Page -->
+        <div id="mergePage" class="page-content hidden">
+            <header>
+                <div class="page-header-nav">
+                    <button id="backToMainBtn" class="back-btn" title="Back to Main">← Back</button>
+                    <div class="page-title-section">
+                        <h1>🔄 File Merge</h1>
+                        <p>Merge individual (_indiv) CSV files chronologically</p>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <div class="merge-section-container">
+                    <div class="section-header">
+                        <h2>Select Files to Merge</h2>
+                        <p class="section-description">Choose two or more _indiv files to merge them chronologically based on their dates.</p>
+                    </div>
+
+                    <!-- File Selection Area -->
+                    <div class="merge-file-selection">
+                        <div class="file-input-container">
+                            <button id="selectMergeFilesBtn" class="btn-primary">📄 Select _indiv Files</button>
+                            <input type="file" id="mergeFilesInput" accept=".csv" multiple hidden>
+                            <span class="file-input-help">Select multiple CSV files that contain "_indiv" in their filename (case-insensitive)</span>
+                        </div>
+
+                        <!-- Selected Files List -->
+                        <div class="selected-files-container hidden" id="selectedFilesContainer">
+                            <h3>Selected Files</h3>
+                            <div class="selected-files-list" id="selectedFilesList">
+                                <!-- Selected files will appear here -->
+                            </div>
+                            <div class="merge-controls">
+                                <button id="processMergeBtn" class="btn-primary" disabled>🔄 Process Merge</button>
+                                <button id="clearSelectionBtn" class="btn-secondary">Clear Selection</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Merge Preview Area -->
+                    <div class="merge-preview-container hidden" id="mergePreviewContainer">
+                        <div class="preview-header">
+                            <h3>Merge Preview</h3>
+                            <div class="preview-info" id="previewInfo"></div>
+                        </div>
+
+                        <div class="preview-table-wrapper">
+                            <table id="mergePreviewTable" class="preview-table">
+                                <thead id="mergePreviewHead"></thead>
+                                <tbody id="mergePreviewBody"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="merge-actions">
+                            <button id="saveMergedFileBtn" class="btn-primary">💾 Save Merged File</button>
+                            <button id="discardMergeBtn" class="btn-secondary">❌ Discard Merge</button>
+                        </div>
+                    </div>
+
+                    <!-- Merge Status Area -->
+                    <div class="merge-status-container hidden" id="mergeStatusContainer">
+                        <div class="status-message" id="mergeStatusMessage"></div>
+                    </div>
+                </div>
+            </main>
+        </div> <!-- End mergePage -->
 
     </div>
 
