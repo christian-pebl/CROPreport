@@ -5994,9 +5994,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             toggleContainer.appendChild(tableBtn);
             chartContainer.appendChild(toggleContainer);
 
-            // Create canvas for chart
+            // Create canvas for chart with dynamic width based on number of stations
             const canvas = document.createElement('canvas');
-            canvas.width = 576;
+            const stationCount = aggregatedData.length;
+            const minCanvasWidth = 576;
+            const optimalWidthPerStation = 50; // Optimal width per station for clear display
+            const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+            canvas.width = dynamicWidth;
             canvas.height = 360;
             canvas.id = 'widthDistributionChart';
             chartContainer.appendChild(canvas);
@@ -7155,9 +7159,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
     renderBladeCountChart(data, outputDiv, stationDateMap = {}) {
 
-        // Create canvas for chart
+        // Create canvas for chart with dynamic width based on number of stations
         const canvas = document.createElement('canvas');
-        canvas.width = 576;
+        const stationCount = data.length;
+        const minCanvasWidth = 576;
+        const optimalWidthPerStation = 50; // Optimal width per station for clear display
+        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+        canvas.width = dynamicWidth;
         canvas.height = 360;
         canvas.style.border = '1px solid #ddd';
         canvas.style.borderRadius = '4px';
@@ -7921,9 +7929,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             chartContainer.style.marginTop = '20px';
 
 
-            // Create canvas with error handling
+            // Create canvas with dynamic width based on number of stations
             const canvas = document.createElement('canvas');
-            canvas.width = 576;
+            const stationCount = aggregatedData.length;
+            const minCanvasWidth = 576;
+            const optimalWidthPerStation = 50; // Optimal width per station for clear display
+            const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+            canvas.width = dynamicWidth;
             canvas.height = 360;
             canvas.style.display = 'block';
             canvas.style.margin = '0 auto';
