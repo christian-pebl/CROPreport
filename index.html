@@ -45,8 +45,11 @@
                     <button id="loadPageBtn" class="nav-btn" data-page="reformat" title="Load Data">
                         📄 Load
                     </button>
-                    <button id="plotPageBtn" class="nav-btn" data-page="plot" title="Plot Data">
-                        📊 Plot
+                    <button id="plotPageBtn" class="nav-btn" data-page="plot" title="Crop Plot Data">
+                        📊 Crop-Plot
+                    </button>
+                    <button id="chemPlotPageBtn" class="nav-btn" data-page="chemPlot" title="Chemical Plot Data">
+                        🧪 Chem-Plot
                     </button>
                     <button id="mergePageBtn" class="nav-btn" title="Merge Files">
                         🔄 Merge
@@ -290,6 +293,53 @@
 
             </main>
         </div> <!-- End plotPage -->
+
+        <!-- Chem-Plot Page -->
+        <div id="chemPlotPage" class="page-content hidden">
+            <main>
+                <!-- Chemical Data Visualization Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Chemical Data Visualization</h2>
+                    </div>
+
+                    <div class="comparison-container">
+                        <div class="comparison-card">
+                            <div class="card-header">
+                                <h3>Chemical Variables Plot</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="chemDataSourceSelect">Data Source (_chem.csv files):</label>
+                                        <select id="chemDataSourceSelect" class="form-control">
+                                            <option value="">Select _chem.csv file...</option>
+                                        </select>
+                                        <small class="help-text">Choose a chemical analysis file for visualization</small>
+                                    </div>
+                                </div>
+
+                                <!-- Variable Selection Checkboxes -->
+                                <div class="form-group" id="chemVariableSelectionGroup" style="display: none;">
+                                    <label>Select Variables to Plot:</label>
+                                    <div id="chemVariableCheckboxes" class="variable-checkboxes">
+                                        <!-- Checkboxes will be populated dynamically -->
+                                    </div>
+                                    <small class="help-text">Select one variable to plot as a column chart. Sample names will be used as x-axis labels.</small>
+                                </div>
+
+                                <div class="button-row">
+                                    <button id="generateChemPlotBtn" class="btn-primary" disabled>
+                                        Generate Chemical Variables Plot
+                                    </button>
+                                </div>
+                                <div id="chemPlotOutput" class="output-area"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div> <!-- End chemPlotPage -->
 
         <!-- Merge Page -->
         <div id="mergePage" class="page-content hidden">

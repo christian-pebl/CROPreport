@@ -220,6 +220,25 @@ class CSVManager {
         this.showWorkingDirModal = false;
     }
 
+    ensureLoadPageActive() {
+        // Make sure we're on the Load (reformat) page after file loading
+        document.querySelectorAll('.page-content').forEach(page => {
+            page.classList.remove('active');
+        });
+        document.getElementById('reformatPage')?.classList.add('active');
+
+        // Update navigation buttons
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector('.nav-btn[data-page="reformat"]')?.classList.add('active');
+
+        // Update navigation manager if it exists
+        if (typeof navigationManager !== 'undefined' && navigationManager) {
+            navigationManager.currentPage = 'reformat';
+        }
+    }
+
     handleFileSelection(files, selectionType) {
         if (!files || files.length === 0) return;
 
@@ -244,6 +263,9 @@ class CSVManager {
         // Show success message
         const message = `Successfully loaded ${this.workingDirFiles.length} CSV file${this.workingDirFiles.length !== 1 ? 's' : ''}.`;
         this.showSuccess(message);
+
+        // Ensure we stay on the Load page after file loading
+        this.ensureLoadPageActive();
     }
 
     analyzeWorkingDirFiles() {
@@ -337,10 +359,6 @@ class CSVManager {
 
             let convertButtons = '';
             if (canConvert) {
-                // Only show STD conversion if we have raw but no STD
-                if (hasRaw && !hasStd) {
-                    convertButtons += `<button class="btn-small btn-convert" onclick="csvManager.generateStdFromBrowser('${fileInfo.baseName}')">⚡ STD</button>`;
-                }
                 // Only show 24HR conversion if we have STD but no 24HR
                 if (hasStd && !has24hr) {
                     convertButtons += `<button class="btn-small btn-convert" onclick="csvManager.generate24hrFromBrowser('${fileInfo.baseName}')">⚡ 24HR</button>`;
@@ -377,6 +395,7 @@ class CSVManager {
             'raw': 'version-raw',
             'std': 'version-std',
             '24hr': 'version-24hr',
+            'chem': 'version-chem',
             'processed': 'version-processed',
             'filtered': 'version-filtered',
             'clean': 'version-clean'
@@ -8635,6 +8654,277 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         outputDiv.appendChild(tableContainer);
         console.log('✅ Enhanced box plot summary table created successfully');
     }
+
+    initializeChemPlotPage() {
+        // Setup event listeners for chem-plot page elements
+        const chemDataSourceSelect = document.getElementById("chemDataSourceSelect");
+        const generateChemPlotBtn = document.getElementById("generateChemPlotBtn");
+        const chemVariableSelectionGroup = document.getElementById("chemVariableSelectionGroup");
+
+        const updateVariablesDropdown = () => {
+            const selectedSource = chemDataSourceSelect.value;
+
+            if (selectedSource && selectedSource.includes('_chem')) {
+                // Show variable selection
+                chemVariableSelectionGroup.style.display = 'block';
+                generateChemPlotBtn.disabled = false;
+
+                // Populate variable checkboxes
+                this.populateChemVariableCheckboxes(selectedSource);
+            } else {
+                // Hide variable selection and disable button
+                chemVariableSelectionGroup.style.display = 'none';
+                generateChemPlotBtn.disabled = true;
+            }
+        };
+
+        if (chemDataSourceSelect) {
+            chemDataSourceSelect.addEventListener("change", updateVariablesDropdown);
+        }
+
+        if (generateChemPlotBtn) {
+            generateChemPlotBtn.addEventListener("click", () => {
+                this.generateChemPlot();
+            });
+        }
+
+        // Populate the data source dropdown with existing loaded files
+        this.updateChemPlotDataSources();
+    }
+
+    updateChemPlotDataSources() {
+        const chemDataSourceSelect = document.getElementById('chemDataSourceSelect');
+        if (chemDataSourceSelect && csvManager && csvManager.workingDirFiles) {
+            chemDataSourceSelect.innerHTML = '<option value="">Select _chem.csv file...</option>';
+            const chemFiles = csvManager.workingDirFiles.filter(file =>
+                file.name.toLowerCase().includes('_chem') && file.name.toLowerCase().endsWith('.csv')
+            );
+            console.log('Found chem files:', chemFiles.map(f => f.name));
+            chemFiles.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                chemDataSourceSelect.appendChild(option);
+            });
+        }
+    }
+
+    populateChemVariableCheckboxes(selectedFilename) {
+        console.log('populateChemVariableCheckboxes called with:', selectedFilename);
+        const checkboxContainer = document.getElementById('chemVariableCheckboxes');
+        console.log('Checkbox container found:', !!checkboxContainer);
+        if (!checkboxContainer) return;
+
+        // Clear existing checkboxes
+        checkboxContainer.innerHTML = '';
+
+        // Get the parsed data from csvManager for the selected file
+        // We need to load the specific file first to get its parsed data
+        const fileObject = csvManager && csvManager.workingDirFiles ?
+            csvManager.workingDirFiles.find(file => file.name === selectedFilename) : null;
+
+        console.log('File object found:', !!fileObject);
+
+        if (!fileObject) {
+            checkboxContainer.innerHTML = '<p>File not found. Please reload the files.</p>';
+            return;
+        }
+
+        // Check if this file is currently loaded in csvManager
+        if (csvManager.fileName !== selectedFilename) {
+            console.log('Loading file into csvManager:', selectedFilename);
+            // Load the file to get its parsed data using handleFileUpload
+            try {
+                csvManager.handleFileUpload(fileObject);
+                // Wait a bit for the file to be processed, then recursively call
+                setTimeout(() => {
+                    this.populateChemVariableCheckboxes(selectedFilename);
+                }, 100);
+            } catch (error) {
+                console.error('Error loading file:', error);
+                checkboxContainer.innerHTML = '<p>Error loading file. Please try again.</p>';
+            }
+            return;
+        }
+
+        // Now we can access the parsed data
+        const headers = csvManager.headers;
+        const data = csvManager.csvData;
+
+        console.log('CSV Manager headers:', headers);
+        console.log('CSV Manager data length:', data ? data.length : 'no data');
+
+        if (!headers || headers.length < 3) {
+            checkboxContainer.innerHTML = '<p>File must have at least 3 columns (Sample, Date, and variables).</p>';
+            return;
+        }
+
+        // Get headers (skip Sample and Date columns - columns 0 and 1)
+        const variableHeaders = headers.slice(2);
+        console.log('Headers after skipping first 2:', variableHeaders);
+        console.log('Variable headers length:', variableHeaders.length);
+
+        if (variableHeaders.length === 0) {
+            checkboxContainer.innerHTML = '<p>No variables found in the file headers.</p>';
+            return;
+        }
+
+        variableHeaders.forEach((header, index) => {
+            console.log(`Creating radio button ${index} for header:`, header);
+            const checkboxItem = document.createElement('div');
+            checkboxItem.className = 'variable-checkbox-item';
+
+            // Use radio buttons instead of checkboxes for single selection
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'chemVariable'; // Group all radio buttons
+            radio.id = `chemVar_${index}`;
+            radio.value = header;
+            radio.checked = index === 0; // Select first variable by default
+
+            if (index === 0) {
+                checkboxItem.classList.add('default-selected');
+            }
+
+            const label = document.createElement('label');
+            label.htmlFor = `chemVar_${index}`;
+            label.textContent = header;
+
+            checkboxItem.appendChild(radio);
+            checkboxItem.appendChild(label);
+            checkboxContainer.appendChild(checkboxItem);
+
+            console.log(`Added radio button ${index}:`, radio);
+        });
+
+        console.log('Final container innerHTML:', checkboxContainer.innerHTML);
+        console.log('Final radio buttons count:', document.querySelectorAll('#chemVariableCheckboxes input[type="radio"]').length);
+    }
+
+    generateChemPlot() {
+        const outputDiv = document.getElementById("chemPlotOutput");
+
+        // Make sure output div is visible
+        outputDiv.classList.add('active');
+
+        try {
+            // Show loading state
+            outputDiv.innerHTML = "<p>Generating chemical variables plot...</p>";
+
+            // Get selected file and variables
+            const chemDataSourceSelect = document.getElementById("chemDataSourceSelect");
+            const selectedFilename = chemDataSourceSelect.value;
+
+            if (!selectedFilename) {
+                throw new Error('Please select a _chem.csv file.');
+            }
+
+            // Get selected variables
+            const selectedVariables = this.getSelectedChemVariables();
+            if (selectedVariables.length === 0) {
+                throw new Error('Please select at least one variable to plot.');
+            }
+
+            // Make sure the selected file is loaded in csvManager
+            if (csvManager.fileName !== selectedFilename) {
+                throw new Error('Selected file is not currently loaded. Please select the file again.');
+            }
+
+            // Use csvManager's parsed data
+            const fileData = {
+                headers: csvManager.headers,
+                data: csvManager.csvData
+            };
+
+            if (!fileData.headers || !fileData.data) {
+                throw new Error('File data not found. Please reload the file.');
+            }
+
+            // Generate the plot
+            this.renderChemicalVariablesChart(fileData, selectedVariables, outputDiv);
+
+        } catch (error) {
+            console.error('Error generating chemical plot:', error);
+            outputDiv.innerHTML = `<div class="error-message" style="color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 6px;">Error: ${error.message}</div>`;
+        }
+    }
+
+    getSelectedChemVariables() {
+        const checkboxContainer = document.getElementById('chemVariableCheckboxes');
+        console.log('Checkbox container:', checkboxContainer);
+        console.log('Container children:', checkboxContainer ? checkboxContainer.children.length : 'not found');
+
+        const allRadios = document.querySelectorAll('#chemVariableCheckboxes input[type="radio"]');
+        console.log('All radio buttons found:', allRadios.length);
+
+        const selectedRadio = document.querySelector('#chemVariableCheckboxes input[type="radio"]:checked');
+        console.log('Selected radio:', selectedRadio);
+
+        return selectedRadio ? [selectedRadio.value] : [];
+    }
+
+    renderChemicalVariablesChart(fileData, selectedVariables, outputDiv) {
+        // Extract sample names (column 0) and skip date (column 1)
+        const sampleNames = fileData.data.map(row => row[0]);
+        const headers = fileData.headers.slice(2); // Skip Sample and Date columns
+
+        // For simplicity, let's plot only the first selected variable as a column chart
+        const selectedVariable = selectedVariables[0];
+        const columnIndex = headers.indexOf(selectedVariable);
+
+        if (columnIndex === -1) {
+            outputDiv.innerHTML = '<div class="error-message">Selected variable not found in data.</div>';
+            return;
+        }
+
+        // Get values for the selected variable
+        const values = fileData.data.map(row => {
+            const value = row[columnIndex + 2]; // +2 because we skip Sample and Date columns
+            return parseFloat(value) || 0;
+        });
+
+        // Create a simple HTML table/chart
+        const chartHTML = `
+            <div style="background: white; border: 1px solid #e0e6ed; border-radius: 6px; padding: 20px;">
+                <h3 style="text-align: center; margin-bottom: 20px; color: #333;">${selectedVariable}</h3>
+                <div style="display: flex; align-items: end; justify-content: space-around; height: 300px; border-bottom: 2px solid #333; padding: 10px;">
+                    ${sampleNames.map((sample, index) => {
+                        const value = values[index];
+                        const maxValue = Math.max(...values);
+                        const height = maxValue > 0 ? (value / maxValue) * 250 : 0;
+                        return `
+                            <div style="display: flex; flex-direction: column; align-items: center; margin: 0 5px;">
+                                <div style="background: #1f77b4; width: 60px; height: ${height}px; margin-bottom: 5px; border-radius: 3px; display: flex; align-items: end; justify-content: center; color: white; font-size: 10px; padding: 2px;">
+                                    ${value}
+                                </div>
+                                <div style="writing-mode: vertical-lr; transform: rotate(180deg); font-size: 11px; color: #666; max-width: 60px; text-align: center;">
+                                    ${sample}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: #f9fafb; border-radius: 4px; font-size: 0.85rem;">
+                    <strong>Summary:</strong><br>
+                    • Variable: ${selectedVariable}<br>
+                    • Samples: ${sampleNames.length}<br>
+                    • Max value: ${Math.max(...values).toFixed(2)}<br>
+                    • Min value: ${Math.min(...values).toFixed(2)}<br>
+                    • Data source: ${fileData.name}
+                </div>
+            </div>
+        `;
+
+        outputDiv.innerHTML = chartHTML;
+    }
+
+    getChartColor(index) {
+        const colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+        ];
+        return colors[index % colors.length];
+    }
 }
 
 
@@ -8650,6 +8940,12 @@ class MergePageManager {
         const mergePageBtn = document.getElementById('mergePageBtn');
         if (mergePageBtn) {
             mergePageBtn.addEventListener('click', () => this.showMergePage());
+        }
+
+        // Chem-Plot page navigation
+        const chemPlotPageBtn = document.getElementById('chemPlotPageBtn');
+        if (chemPlotPageBtn) {
+            chemPlotPageBtn.addEventListener('click', () => this.showChemPlotPage());
         }
 
         // Back button navigation
@@ -8708,6 +9004,37 @@ class MergePageManager {
         // Update navigation manager's current page
         if (navigationManager) {
             navigationManager.currentPage = 'merge';
+        }
+    }
+
+    showChemPlotPage() {
+        // Hide all other pages and show chem-plot page
+        document.querySelectorAll('.page-content').forEach(page => {
+            page.classList.remove('active');
+        });
+
+        // Show chem-plot page
+        const chemPlotPage = document.getElementById('chemPlotPage');
+        if (chemPlotPage) {
+            chemPlotPage.classList.add('active');
+        }
+
+        // Set chem-plot button as active
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('chemPlotPageBtn')?.classList.add('active');
+
+        // Update navigation manager's current page
+        if (navigationManager) {
+            navigationManager.currentPage = 'chemPlot';
+        }
+
+        // Initialize the chem-plot functionality
+        if (navigationManager) {
+            navigationManager.initializeChemPlotPage();
+            // Update data sources in case files were already loaded
+            navigationManager.updateChemPlotDataSources();
         }
     }
 
@@ -8992,6 +9319,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (navigationManager) {
             // Fire and forget - don't await to avoid blocking the UI
             navigationManager.updatePlotPageFileInfo().catch(console.error);
+            // Also update chem plot data sources
+            navigationManager.updateChemPlotDataSources();
         }
     };
 });

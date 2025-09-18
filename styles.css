@@ -269,6 +269,11 @@ header p {
     color: #fa8c16;
 }
 
+.version-chem {
+    background: #e6f4ff;
+    color: #1677ff;
+}
+
 .version-processed {
     background: #fff1f0;
     color: #f5222d;
@@ -1320,6 +1325,11 @@ header p {
 .version-24hr {
     background: #fff7e6;
     color: #fa8c16;
+}
+
+.version-chem {
+    background: #e6f4ff;
+    color: #1677ff;
 }
 
 .version-processed {
@@ -3062,3 +3072,54 @@ body.progress-active .file-management-section {
     margin-left: 8px;
 }
 
+
+
+/* Chemical Variables Checkbox Styles */
+.variable-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #e0e6ed;
+    border-radius: 6px;
+    background-color: #fafbfc;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.variable-checkbox-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: white;
+    border: 1px solid #e0e6ed;
+    transition: background-color 0.2s;
+}
+
+.variable-checkbox-item:hover {
+    background-color: #f0f8ff;
+}
+
+.variable-checkbox-item input[type="checkbox"] {
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.variable-checkbox-item label {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #333;
+    flex: 1;
+    margin: 0;
+}
+
+.variable-checkbox-item.default-selected {
+    background-color: #e6f4ff;
+    border-color: #1677ff;
+}
+
+.variable-checkbox-item.default-selected label {
+    font-weight: 500;
+    color: #1677ff;
+}
