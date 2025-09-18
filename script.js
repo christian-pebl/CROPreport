@@ -7032,14 +7032,16 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         data.forEach(row => {
             const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const date = row['Date'] || row.date;
             const dateValue = this.parseDateFromRow(row);
 
-            if (!sampleId) return;
+            if (!sampleId || !date) return;
+
+            // Create unique station+date identifier
+            const stationDateId = `${sampleId} (${date})`;
 
             if (dateValue) {
-                if (!stationDates[sampleId] || dateValue < stationDates[sampleId]) {
-                    stationDates[sampleId] = dateValue;
-                }
+                stationDates[stationDateId] = dateValue;
             }
         });
 
@@ -7120,15 +7122,18 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const grouped = {};
         const stationSet = new Set();
 
-        // Group and count
+        // Group and count by station + date combinations
         data.forEach(row => {
             const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const date = row['Date'] || row.date;
             const subset = row.subset.toString().toLowerCase().trim();
 
-            if (!sampleId) return;
+            if (!sampleId || !date) return;
 
-            stationSet.add(sampleId);
-            const key = `${sampleId}_${subset}`;
+            // Create unique station+date identifier
+            const stationDateId = `${sampleId} (${date})`;
+            stationSet.add(stationDateId);
+            const key = `${stationDateId}_${subset}`;
             grouped[key] = (grouped[key] || 0) + 1;
         });
 
@@ -7141,12 +7146,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             date: stationDateMap[s] ? stationDateMap[s].toISOString().split('T')[0] : 'no date'
         })));
 
-        const result = stations.map(station => {
-            const smallCount = grouped[`${station}_small`] || 0;
-            const largeCount = grouped[`${station}_large`] || 0;
+        const result = stations.map(stationDateId => {
+            const smallCount = grouped[`${stationDateId}_small`] || 0;
+            const largeCount = grouped[`${stationDateId}_large`] || 0;
 
             return {
-                station: station,
+                station: stationDateId,
                 smallBlades: smallCount,
                 largeBlades: largeCount,
                 total: smallCount + largeCount
@@ -7428,9 +7433,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const stationMeasurements = {};
         const stationSet = new Set();
 
-        // Process each row to extract individual measurements
+        // Process each row to extract individual measurements by station+date
         rawData.forEach((row, index) => {
             const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const date = row['Date'] || row.date;
             const bladeId = row['blade ID'] || row.bladeId || row.blade_id;
             const measurement = parseFloat(row[measurementType]);
 
@@ -7439,18 +7445,20 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 return;
             }
 
-            // Skip rows without valid station ID
-            if (!sampleId || sampleId === '') {
+            // Skip rows without valid station ID or date
+            if (!sampleId || sampleId === '' || !date || date === '') {
                 return;
             }
 
-            stationSet.add(sampleId);
+            // Create unique station+date identifier
+            const stationDateId = `${sampleId} (${date})`;
+            stationSet.add(stationDateId);
 
-            if (!stationMeasurements[sampleId]) {
-                stationMeasurements[sampleId] = [];
+            if (!stationMeasurements[stationDateId]) {
+                stationMeasurements[stationDateId] = [];
             }
 
-            stationMeasurements[sampleId].push({
+            stationMeasurements[stationDateId].push({
                 bladeId: bladeId,
                 value: measurement,
                 subset: row.subset || 'unknown'
