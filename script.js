@@ -5890,6 +5890,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             // Try to extract individual measurements first
             let aggregatedData = [];
             let chartType = 'Simple Chart';
+            let stationDateMap = {};
 
             if (individualColumn) {
                 console.log(`🔍 Attempting individual data extraction for: ${individualColumn}`);
@@ -5904,7 +5905,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                         const filteredMeasurements = this.filterStationMeasurementsBySubset(stationMeasurements, selectedVariable);
 
                         // Convert to aggregated format with box plot statistics
-                        const stationDateMap = this.buildStationDateMap(rawData);
+                        stationDateMap = this.buildStationDateMap(rawData);
                         const sortedStations = this.sortStationsByTime(Object.keys(filteredMeasurements), stationDateMap);
                         aggregatedData = sortedStations.map(station => {
                             const measurements = filteredMeasurements[station];
@@ -5949,6 +5950,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             // Fallback to simple average if no individual data
             if (aggregatedData.length === 0) {
                 console.log('📊 Creating simple average chart');
+                stationDateMap = this.buildStationDateMap(rawData);
                 aggregatedData = this.aggregateDataByStationForChart(rawData, selectedVariable);
                 chartType = 'Simple Chart';
             }
@@ -6007,7 +6009,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 // Render the chart with station-based data
                 console.log(`📊 WIDTH RENDERING: Creating chart for ${aggregatedData.length} stations from ${filename}`);
                 console.log(`📈 Final width station list: ${aggregatedData.map(d => d.station).join(', ')}`);
-                this.drawWidthDistributionChart(canvas, aggregatedData, selectedVariable);
+                this.drawWidthDistributionChart(canvas, aggregatedData, selectedVariable, stationDateMap);
                 console.log(`✅ WIDTH CHART COMPLETE: Successfully rendered chart for ${filename}`);
 
             } catch (drawError) {
@@ -6073,7 +6075,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         }
     }
 
-    drawWidthDistributionChart(canvas, data, selectedVariable) {
+    drawWidthDistributionChart(canvas, data, selectedVariable, stationDateMap = {}) {
         console.log('🎨 === DRAWING TRUE BOX PLOTS ===');
         console.log('Data width:', data.length);
 
@@ -6104,43 +6106,25 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return;
         }
 
-        // Sort stations naturally (handle both string and numeric sorting)
-        data.sort((a, b) => {
-            const aStation = a.station.toString();
-            const bStation = b.station.toString();
-
-            // Try numeric sort first
-            const aNum = parseFloat(aStation);
-            const bNum = parseFloat(bStation);
-
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return aNum - bNum;
-            }
-
-            // Fall back to string sort
-            return aStation.localeCompare(bStation);
-        });
+        // Data comes pre-sorted by time from aggregation function
 
         const stations = data.map(d => d.station);
         const boxWidth = Math.min(40, chartWidth / stations.length * 0.6);
 
-        let yMin, yMax;
-
+        // Find maximum data value for smart Y-axis calculation
+        let maxDataValue = 0;
         if (hasBoxPlots) {
-            // Calculate Y range from box plot statistics
-            const allValues = [];
+            // Get max from box plot statistics including outliers
             data.forEach(d => {
                 if (d.statistics) {
-                    allValues.push(d.statistics.min, d.statistics.max);
+                    maxDataValue = Math.max(maxDataValue, d.statistics.max);
                     if (d.statistics.outliers) {
-                        allValues.push(...d.statistics.outliers);
+                        maxDataValue = Math.max(maxDataValue, ...d.statistics.outliers);
                     }
                 }
             });
-            yMin = Math.min(...allValues);
-            yMax = Math.max(...allValues);
         } else {
-            // Calculate Y range from average values
+            // Get max from average values
             const values = data.map(d => d.average).filter(v => !isNaN(v));
             if (values.length === 0) {
                 ctx.fillStyle = '#374151';
@@ -6149,15 +6133,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 ctx.fillText('No valid data to display', canvas.width / 2, canvas.height / 2);
                 return;
             }
-            yMin = Math.min(...values);
-            yMax = Math.max(...values);
+            maxDataValue = Math.max(...values);
         }
 
-        // Add padding to Y range
-        const yRange = yMax - yMin;
-        const yPadding = yRange * 0.1;
-        yMin = Math.max(0, yMin - yPadding);
-        yMax = yMax + yPadding;
+        // Calculate smart Y-axis with nice intervals
+        const yAxisConfig = this.calculateSmartYAxis(maxDataValue);
+        const yMin = yAxisConfig.yMin;
+        const yMax = yAxisConfig.yMax;
 
         console.log(`📈 Y-axis range: ${yMin.toFixed(2)} to ${yMax.toFixed(2)}`);
 
@@ -6170,14 +6152,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.lineWidth = 1;
         ctx.strokeRect(padding, padding, chartWidth, chartHeight);
 
-        // Draw Y-axis gridlines and labels
-        const numYTicks = 6;
+        // Draw Y-axis gridlines and labels using smart intervals
         ctx.fillStyle = '#6b7280';
         ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'right';
 
-        for (let i = 0; i <= numYTicks; i++) {
-            const value = yMin + (yMax - yMin) * (i / numYTicks);
+        for (let i = 0; i < yAxisConfig.numTicks; i++) {
+            const value = i * yAxisConfig.stepSize;
             const y = getY(value);
 
             // Draw gridline
@@ -6188,9 +6169,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             ctx.lineTo(padding + chartWidth, y);
             ctx.stroke();
 
-            // Draw label
+            // Draw label (format whole numbers without decimals)
             ctx.fillStyle = '#6b7280';
-            ctx.fillText(value.toFixed(1), padding - 10, y + 4);
+            const labelText = value % 1 === 0 ? value.toString() : value.toFixed(1);
+            ctx.fillText(labelText, padding - 10, y + 4);
         }
 
         // Draw data based on chart type
@@ -6281,10 +6263,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         stations.forEach((station, index) => {
             const x = getX(index);
             ctx.save();
-            ctx.translate(x, padding + chartHeight + 15);
+            ctx.translate(x, padding + chartHeight + 10);
             ctx.rotate(-Math.PI / 4);
             ctx.textAlign = 'right';
-            ctx.fillText(station, 0, 0);
+            const labelData = this.formatStationLabelWithDate(station, stationDateMap);
+            ctx.fillText(labelData.line1, 0, 0);
+            if (labelData.line2) {
+                ctx.fillText(labelData.line2, 0, 12); // Second line 12px below
+            }
             ctx.restore();
         });
 
@@ -6881,10 +6867,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             // Load and process data
             const rawData = await this.loadBladeCountData();
             const cleanedData = this.cleanBladeCountData(rawData);
-            const aggregatedData = this.aggregateBladeCountData(cleanedData);
+            const aggregationResult = this.aggregateBladeCountData(cleanedData);
 
             // Render chart
-            this.renderBladeCountChart(aggregatedData, outputDiv);
+            this.renderBladeCountChart(aggregationResult.data, outputDiv, aggregationResult.stationDateMap);
 
         } catch (error) {
             console.error('Error generating blade count chart:', error);
@@ -7072,6 +7058,60 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         });
     }
 
+    formatStationLabelWithDate(station, stationDateMap) {
+        const date = stationDateMap[station];
+        if (!date) {
+            return { line1: station, line2: null }; // Return just station name if no date
+        }
+
+        // Format date as DD/MM
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const dateStr = `(${day}/${month})`;
+
+        return { line1: station, line2: dateStr };
+    }
+
+    calculateSmartYAxis(maxDataValue) {
+        // Add 10% padding to max value
+        const paddedMax = maxDataValue * 1.1;
+
+        // Determine appropriate step size using nice numbers
+        const rawStep = paddedMax / 5; // Target ~5-6 intervals
+
+        // Nice numbers to choose from
+        const niceNumbers = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000];
+
+        // Find the best step size
+        let stepSize = 1;
+        for (let i = 0; i < niceNumbers.length; i++) {
+            if (niceNumbers[i] >= rawStep) {
+                stepSize = niceNumbers[i];
+                break;
+            }
+            // For larger numbers, scale up the nice numbers
+            if (i === niceNumbers.length - 1) {
+                const scale = Math.pow(10, Math.floor(Math.log10(rawStep)));
+                const normalizedStep = rawStep / scale;
+                if (normalizedStep <= 1) stepSize = 1 * scale;
+                else if (normalizedStep <= 2) stepSize = 2 * scale;
+                else if (normalizedStep <= 5) stepSize = 5 * scale;
+                else stepSize = 10 * scale;
+            }
+        }
+
+        // Calculate final max that accommodates the data
+        const yMax = Math.ceil(paddedMax / stepSize) * stepSize;
+        const numTicks = Math.floor(yMax / stepSize) + 1; // +1 for zero
+
+        return {
+            yMin: 0,
+            yMax: yMax,
+            stepSize: stepSize,
+            numTicks: numTicks
+        };
+    }
+
     aggregateBladeCountData(data) {
         const grouped = {};
         const stationSet = new Set();
@@ -7110,10 +7150,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         });
 
         console.log('Aggregated data:', result);
-        return result;
+        return { data: result, stationDateMap: stationDateMap };
     }
 
-    renderBladeCountChart(data, outputDiv) {
+    renderBladeCountChart(data, outputDiv, stationDateMap = {}) {
 
         // Create canvas for chart
         const canvas = document.createElement('canvas');
@@ -7141,10 +7181,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
 
         // Draw the chart
-        this.drawStackedBarChart(canvas, data);
+        this.drawStackedBarChart(canvas, data, stationDateMap);
     }
 
-    drawStackedBarChart(canvas, data) {
+    drawStackedBarChart(canvas, data, stationDateMap = {}) {
         const ctx = canvas.getContext('2d');
         const padding = 80;
         const chartWidth = canvas.width - 2 * padding;
@@ -7226,7 +7266,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             ctx.save();
             ctx.translate(x + barWidth / 2, canvas.height - padding + 25);
             ctx.rotate(-Math.PI / 4);
-            ctx.fillText(station.station, 0, 0);
+            const labelData = this.formatStationLabelWithDate(station.station, stationDateMap);
+            ctx.fillText(labelData.line1, 0, 0);
+            if (labelData.line2) {
+                ctx.fillText(labelData.line2, 0, 12); // Second line 12px below
+            }
             ctx.restore();
         });
 
@@ -7289,7 +7333,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#555';
         ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Station', canvas.width / 2, canvas.height - padding + 50);
+        ctx.fillText('Station', canvas.width / 2, canvas.height - padding + 60);
 
         ctx.save();
         ctx.translate(35, canvas.height / 2);
@@ -7693,7 +7737,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             console.log(`✅ Successfully processed ${result.length} stations for box plots`);
             console.log('🎯 Box plot aggregation complete');
 
-            return result;
+            return { data: result, stationDateMap: stationDateMap };
 
         } catch (error) {
             console.error('❌ Error in box plot aggregation:', error);
@@ -7850,7 +7894,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             }
 
             // Aggregate data by stations using our new method with SD support
-            const aggregatedData = this.aggregateLengthData(rawData, selectedVariable, filename);
+            const aggregationResult = this.aggregateLengthData(rawData, selectedVariable, filename);
+            const aggregatedData = aggregationResult.data;
+            const stationDateMap = aggregationResult.stationDateMap;
 
             if (aggregatedData.length === 0) {
                 outputDiv.innerHTML = `
@@ -7885,7 +7931,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
             try {
                 // Render the chart with station-based data
-                this.drawLengthDistributionChart(canvas, aggregatedData, selectedVariable);
+                this.drawLengthDistributionChart(canvas, aggregatedData, selectedVariable, stationDateMap);
                 console.log('✅ Chart rendered successfully');
 
             } catch (drawError) {
@@ -8005,7 +8051,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         }
     }
 
-    drawLengthDistributionChart(canvas, data, selectedVariable) {
+    drawLengthDistributionChart(canvas, data, selectedVariable, stationDateMap = {}) {
         console.log('🎨 === DRAWING TRUE BOX PLOTS ===');
         console.log('Data length:', data.length);
 
@@ -8027,12 +8073,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         console.log(`📊 Chart type: ${hasBoxPlots ? 'Box Plot' : 'Regular Bar Chart'}`);
 
-        // Add chart title
-        ctx.fillStyle = '#555';
-        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(chartTitle, padding, 50);
-
         if (data.length === 0) {
             // Draw "No data" message
             ctx.fillStyle = '#374151';
@@ -8042,22 +8082,26 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return;
         }
 
-        // Calculate max value for scaling with buffer
-        let maxDataValue = 0;
-        let minDataValue = Infinity;
+        // Data comes pre-sorted by time from aggregation function
 
+        const stations = data.map(d => d.station);
+        const boxWidth = Math.min(40, chartWidth / stations.length * 0.6);
+
+        // Find maximum data value for smart Y-axis calculation
+        let maxDataValue = 0;
         if (hasBoxPlots) {
-            // Use box plot statistics for scaling
-            data.forEach(station => {
-                if (station.statistics) {
-                    maxDataValue = Math.max(maxDataValue, station.statistics.max, ...station.statistics.outliers);
-                    minDataValue = Math.min(minDataValue, station.statistics.min, ...station.statistics.outliers);
+            // Get max from box plot statistics including outliers
+            data.forEach(d => {
+                if (d.statistics) {
+                    maxDataValue = Math.max(maxDataValue, d.statistics.max);
+                    if (d.statistics.outliers) {
+                        maxDataValue = Math.max(maxDataValue, ...d.statistics.outliers);
+                    }
                 }
             });
-            console.log(`📏 Box plot range: ${minDataValue.toFixed(1)} to ${maxDataValue.toFixed(1)}`);
         } else {
-            // Fallback to avgLength for scaling
-            const values = data.map(d => d.avgLength).filter(v => !isNaN(v));
+            // Get max from average values
+            const values = data.map(d => d.avgLength || d.average).filter(v => !isNaN(v));
             if (values.length === 0) {
                 ctx.fillStyle = '#374151';
                 ctx.font = '16px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
@@ -8066,202 +8110,152 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 return;
             }
             maxDataValue = Math.max(...values);
-            minDataValue = 0;
         }
 
-        // Sort stations naturally (handle both string and numeric sorting)
-        data.sort((a, b) => {
-            const aStation = a.station.toString();
-            const bStation = b.station.toString();
+        // Calculate smart Y-axis with nice intervals
+        const yAxisConfig = this.calculateSmartYAxis(maxDataValue);
+        const yMin = yAxisConfig.yMin;
+        const yMax = yAxisConfig.yMax;
 
-            // Try numeric sort first
-            const aNum = parseFloat(aStation);
-            const bNum = parseFloat(bStation);
+        console.log(`📈 Y-axis range: ${yMin.toFixed(2)} to ${yMax.toFixed(2)}`);
 
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return aNum - bNum;
-            }
+        // Calculate position helpers
+        const getX = (index) => padding + (index + 0.5) * (chartWidth / stations.length);
+        const getY = (value) => padding + (1 - (value - yMin) / (yMax - yMin)) * chartHeight;
 
-            // Fallback to string sort
-            return aStation.localeCompare(bStation);
-        });
-
-        const maxValue = maxDataValue * 1.1;  // 10% buffer
-        const yScale = chartHeight / maxValue;
-
-        const boxWidth = chartWidth / data.length * 0.7;  // Box width
-        const boxSpacing = chartWidth / data.length * 0.3;
-
-        // Color scheme for box plots - Updated to match reference image
-        const boxColor = '#f8f9fa';      // Very light gray fill
-        const boxStroke = '#2c3e50';     // Dark blue-gray border
-        const medianColor = '#e74c3c';   // Bright red median line
-        const whiskerColor = '#34495e';  // Dark gray whiskers
-        const outlierColor = '#e67e22';  // Orange outliers
-
-        // Draw gridlines first
-        ctx.strokeStyle = '#e0e0e0';
-        ctx.lineWidth = 0.5;
-        ctx.setLineDash([2, 4]);
-
-        for (let i = 0; i <= 5; i++) {
-            const y = padding + (chartHeight * i / 5);
-            ctx.beginPath();
-            ctx.moveTo(padding, y);
-            ctx.lineTo(padding + chartWidth, y);
-            ctx.stroke();
-        }
-
-        ctx.setLineDash([]);
-
-        // Draw box plots for each station
-        data.forEach((station, index) => {
-            const x = padding + index * (boxWidth + boxSpacing) + boxSpacing / 2;
-            const centerX = x + boxWidth / 2;
-
-            console.log(`\n📊 Drawing chart for station: ${station.station}`);
-
-            if (hasBoxPlots && station.hasBoxPlot && station.statistics) {
-                const stats = station.statistics;
-                console.log(`📈 Drawing box plot: Q1=${stats.q1.toFixed(1)}, Med=${stats.median.toFixed(1)}, Q3=${stats.q3.toFixed(1)}`);
-
-                // Calculate y positions
-                const q1Y = canvas.height - padding - (stats.q1 * yScale);
-                const medianY = canvas.height - padding - (stats.median * yScale);
-                const q3Y = canvas.height - padding - (stats.q3 * yScale);
-                const whiskerMinY = canvas.height - padding - (stats.whiskerMin * yScale);
-                const whiskerMaxY = canvas.height - padding - (stats.whiskerMax * yScale);
-
-                // Draw whiskers (vertical lines)
-                ctx.strokeStyle = whiskerColor;
-                ctx.lineWidth = 1.5;
-
-                // Upper whisker
-                ctx.beginPath();
-                ctx.moveTo(centerX, q3Y);
-                ctx.lineTo(centerX, whiskerMaxY);
-                ctx.stroke();
-
-                // Lower whisker
-                ctx.beginPath();
-                ctx.moveTo(centerX, q1Y);
-                ctx.lineTo(centerX, whiskerMinY);
-                ctx.stroke();
-
-                // Whisker caps
-                const capWidth = boxWidth * 0.3;
-                ctx.beginPath();
-                ctx.moveTo(centerX - capWidth/2, whiskerMaxY);
-                ctx.lineTo(centerX + capWidth/2, whiskerMaxY);
-                ctx.moveTo(centerX - capWidth/2, whiskerMinY);
-                ctx.lineTo(centerX + capWidth/2, whiskerMinY);
-                ctx.stroke();
-
-                // Draw box (Q1 to Q3)
-                const boxHeight = q1Y - q3Y;
-                const boxLeft = x + boxWidth * 0.15;
-                const boxDrawWidth = boxWidth * 0.7;
-
-                // Box fill
-                ctx.fillStyle = boxColor;
-                ctx.fillRect(boxLeft, q3Y, boxDrawWidth, boxHeight);
-
-                // Box border
-                ctx.strokeStyle = boxStroke;
-                ctx.lineWidth = 1.5;
-                ctx.strokeRect(boxLeft, q3Y, boxDrawWidth, boxHeight);
-
-                // Median line
-                ctx.strokeStyle = medianColor;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(boxLeft, medianY);
-                ctx.lineTo(boxLeft + boxDrawWidth, medianY);
-                ctx.stroke();
-
-                // Draw outliers
-                if (stats.outliers && stats.outliers.length > 0) {
-                    ctx.fillStyle = outlierColor;
-                    stats.outliers.forEach(outlier => {
-                        const outlierY = canvas.height - padding - (outlier * yScale);
-                        ctx.beginPath();
-                        ctx.arc(centerX, outlierY, 3, 0, 2 * Math.PI);
-                        ctx.fill();
-                    });
-                    console.log(`🔴 Drew ${stats.outliers.length} outliers`);
-                }
-
-                // Add statistics label - COMMENTED OUT
-                // ctx.fillStyle = '#1f2937';
-                // ctx.font = '9px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-                // ctx.textAlign = 'center';
-                // const labelText = `Med: ${stats.median.toFixed(1)}`;
-                // ctx.fillText(labelText, centerX, whiskerMaxY - 8);
-
-            } else {
-                // Draw regular bar (fallback when no box plot data)
-                console.log(`📊 Drawing fallback bar chart: avg=${station.avgLength.toFixed(1)}`);
-
-                const barHeight = station.avgLength * yScale;
-                ctx.fillStyle = '#1f77b4';
-                ctx.fillRect(x + boxWidth * 0.2, canvas.height - padding - barHeight, boxWidth * 0.6, barHeight);
-
-                // Value label
-                ctx.fillStyle = '#1f2937';
-                ctx.font = '10px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(station.avgLength.toFixed(1), centerX, canvas.height - padding - barHeight - 5);
-            }
-
-            // Station label (rotated 45 degrees)
-            ctx.save();
-            ctx.translate(centerX, canvas.height - padding + 15);
-            ctx.rotate(-Math.PI / 4);
-            ctx.fillStyle = '#374151';
-            ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-            ctx.textAlign = 'right';
-            ctx.fillText(station.station, 0, 0);
-            ctx.restore();
-        });
-
-        // Draw axes
-        ctx.strokeStyle = '#374151';
+        // Draw frame lines (light gray box around plot area)
+        ctx.strokeStyle = '#d1d5db';
         ctx.lineWidth = 1;
+        ctx.strokeRect(padding, padding, chartWidth, chartHeight);
 
-        // Y-axis
-        ctx.beginPath();
-        ctx.moveTo(padding, padding);
-        ctx.lineTo(padding, padding + chartHeight);
-        ctx.stroke();
-
-        // X-axis
-        ctx.beginPath();
-        ctx.moveTo(padding, canvas.height - padding);
-        ctx.lineTo(padding + chartWidth, canvas.height - padding);
-        ctx.stroke();
-
-        // Right vertical framing line (at max x)
-        ctx.beginPath();
-        ctx.moveTo(padding + chartWidth, padding);
-        ctx.lineTo(padding + chartWidth, canvas.height - padding);
-        ctx.stroke();
-
-        // Top horizontal framing line (at max y)
-        ctx.beginPath();
-        ctx.moveTo(padding, padding);
-        ctx.lineTo(padding + chartWidth, padding);
-        ctx.stroke();
-
-        // Y-axis labels
+        // Draw Y-axis gridlines and labels
+        // Draw Y-axis gridlines and labels using smart intervals
         ctx.fillStyle = '#6b7280';
         ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'right';
 
-        for (let i = 0; i <= 5; i++) {
-            const value = (maxValue * i / 5).toFixed(1);
-            const y = canvas.height - padding - (chartHeight * i / 5);
-            ctx.fillText(value, padding - 10, y + 4);
+        for (let i = 0; i < yAxisConfig.numTicks; i++) {
+            const value = i * yAxisConfig.stepSize;
+            const y = getY(value);
+
+            // Draw gridline
+            ctx.strokeStyle = '#f3f4f6';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(padding + chartWidth, y);
+            ctx.stroke();
+
+            // Draw label (format whole numbers without decimals)
+            ctx.fillStyle = '#6b7280';
+            const labelText = value % 1 === 0 ? value.toString() : value.toFixed(1);
+            ctx.fillText(labelText, padding - 10, y + 4);
         }
+
+        // Draw data based on chart type
+        if (hasBoxPlots) {
+            // Draw box plots with whiskers
+            console.log('🎨 Drawing box plots...');
+
+            data.forEach((item, index) => {
+                if (!item.statistics) return;
+
+                const x = getX(index);
+                const stats = item.statistics;
+
+                const minY = getY(stats.whiskerMin);
+                const q1Y = getY(stats.q1);
+                const medianY = getY(stats.median);
+                const q3Y = getY(stats.q3);
+                const maxY = getY(stats.whiskerMax);
+
+                // Draw whisker lines (vertical)
+                ctx.strokeStyle = '#4b5563';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, minY);
+                ctx.lineTo(x, q1Y);
+                ctx.moveTo(x, q3Y);
+                ctx.lineTo(x, maxY);
+                ctx.stroke();
+
+                // Draw whisker caps
+                ctx.beginPath();
+                ctx.moveTo(x - boxWidth/4, minY);
+                ctx.lineTo(x + boxWidth/4, minY);
+                ctx.moveTo(x - boxWidth/4, maxY);
+                ctx.lineTo(x + boxWidth/4, maxY);
+                ctx.stroke();
+
+                // Draw box (Q1 to Q3)
+                ctx.fillStyle = '#e5e7eb';
+                ctx.strokeStyle = '#4b5563';
+                ctx.lineWidth = 1;
+                const boxHeight = q1Y - q3Y;
+                ctx.fillRect(x - boxWidth/2, q3Y, boxWidth, boxHeight);
+                ctx.strokeRect(x - boxWidth/2, q3Y, boxWidth, boxHeight);
+
+                // Draw median line (bright red)
+                ctx.strokeStyle = '#dc2626';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x - boxWidth/2, medianY);
+                ctx.lineTo(x + boxWidth/2, medianY);
+                ctx.stroke();
+
+                // Draw outliers
+                if (stats.outliers && stats.outliers.length > 0) {
+                    ctx.fillStyle = '#dc2626';
+                    stats.outliers.forEach(outlier => {
+                        const outlierY = getY(outlier);
+                        ctx.beginPath();
+                        ctx.arc(x, outlierY, 2, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+            });
+        } else {
+            // Draw simple bar chart
+            console.log('🎨 Drawing bar chart...');
+
+            data.forEach((item, index) => {
+                const x = getX(index);
+                const y = getY(item.avgLength || item.average);
+                const barHeight = getY(yMin) - y;
+
+                // Draw bar
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(x - boxWidth/2, y, boxWidth, barHeight);
+
+                // Draw bar border
+                ctx.strokeStyle = '#1d4ed8';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x - boxWidth/2, y, boxWidth, barHeight);
+            });
+        }
+
+        // Draw X-axis labels (station names) - rotated 45 degrees
+        ctx.fillStyle = '#374151';
+        ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+        stations.forEach((station, index) => {
+            const x = getX(index);
+            ctx.save();
+            ctx.translate(x, padding + chartHeight + 10);
+            ctx.rotate(-Math.PI / 4);
+            ctx.textAlign = 'right';
+            const labelData = this.formatStationLabelWithDate(station, stationDateMap);
+            ctx.fillText(labelData.line1, 0, 0);
+            if (labelData.line2) {
+                ctx.fillText(labelData.line2, 0, 12); // Second line 12px below
+            }
+            ctx.restore();
+        });
+
+        // Add chart title
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(chartTitle, padding, 50);
 
         // Y-axis title
         ctx.save();
@@ -8278,16 +8272,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#374151';
         ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 55);
-
-        // Add legend for box plots - REMOVED
-        // if (hasBoxPlots) {
-        //     this.drawBoxPlotLegend(ctx, canvas, padding, this.fileName);
-        // }
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 65);
 
         console.log('✅ Box plot chart drawing complete');
     }
-
     drawBoxPlotLegend(ctx, canvas, padding, fileName) {
         console.log('🏷️ Drawing box plot legend');
 
