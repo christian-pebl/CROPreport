@@ -7065,17 +7065,22 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 
     formatStationLabelWithDate(station, stationDateMap) {
+        // Extract station name from compound "StationName (Date)" format
+        const stationNameMatch = station.match(/^(.+?)\s*\(/);
+        const stationName = stationNameMatch ? stationNameMatch[1] : station;
+
         const date = stationDateMap[station];
         if (!date) {
-            return { line1: station, line2: null }; // Return just station name if no date
+            return { line1: stationName, line2: null }; // Return just station name if no date
         }
 
-        // Format date as DD/MM
+        // Format date as DD/MM/YY
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
-        const dateStr = `(${day}/${month})`;
+        const year = String(date.getFullYear()).slice(-2);
+        const dateStr = `(${day}/${month}/${year})`;
 
-        return { line1: station, line2: dateStr };
+        return { line1: stationName, line2: dateStr };
     }
 
     calculateSmartYAxis(maxDataValue) {
