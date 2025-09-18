@@ -159,6 +159,23 @@ class CSVManager {
         if (confirmSavePlotBtn) {
             confirmSavePlotBtn.addEventListener('click', handleConfirmSave);
         }
+
+        // Edit functionality
+        const editTableBtn = document.getElementById('editTableBtn');
+        const completeEditBtn = document.getElementById('completeEditBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+        if (editTableBtn) {
+            editTableBtn.addEventListener('click', () => this.startEditMode());
+        }
+
+        if (completeEditBtn) {
+            completeEditBtn.addEventListener('click', () => this.completeEdit());
+        }
+
+        if (cancelEditBtn) {
+            cancelEditBtn.addEventListener('click', () => this.cancelEdit());
+        }
     }
 
     initializeWorkingDirModal() {
@@ -2995,6 +3012,146 @@ class CSVManager {
             successDiv.remove();
         }, 3000);
     }
+
+    // Edit functionality methods
+    startEditMode() {
+        if (!this.csvData || this.csvData.length === 0) {
+            this.showError('No data to edit. Please load a CSV file first.');
+            return;
+        }
+
+        const tableSection = document.getElementById('tableSection');
+        const editModeControls = document.getElementById('editModeControls');
+        const editTableBtn = document.getElementById('editTableBtn');
+        const dataTitle = document.getElementById('dataTitle');
+
+        // Store original data for cancel functionality
+        this.originalCsvData = JSON.parse(JSON.stringify(this.csvData));
+        this.originalHeaders = [...this.headers];
+
+        // Show edit mode UI
+        tableSection.classList.add('table-editing');
+        editModeControls.classList.remove('hidden');
+        editTableBtn.style.display = 'none';
+
+        // Update title to show edit mode
+        if (dataTitle) {
+            const indicator = document.createElement('span');
+            indicator.className = 'edit-mode-indicator';
+            indicator.textContent = '(EDITING)';
+            indicator.id = 'editModeIndicator';
+            dataTitle.appendChild(indicator);
+        }
+
+        // Make table cells editable
+        this.makeTableEditable();
+    }
+
+    makeTableEditable() {
+        const table = document.getElementById('csvTable');
+        if (!table) return;
+
+        // Make data cells editable (skip header row)
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach((row, rowIndex) => {
+            const cells = row.querySelectorAll('td');
+            cells.forEach((cell, cellIndex) => {
+                cell.contentEditable = true;
+                cell.className = 'editable-cell';
+
+                // Update data on cell edit
+                cell.addEventListener('input', (e) => {
+                    if (this.csvData[rowIndex]) {
+                        this.csvData[rowIndex][cellIndex] = e.target.textContent;
+                    }
+                });
+
+                // Handle Enter key to move to next row
+                cell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const nextRow = rows[rowIndex + 1];
+                        if (nextRow) {
+                            const nextCell = nextRow.cells[cellIndex];
+                            if (nextCell) {
+                                nextCell.focus();
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    completeEdit() {
+        const fileName = this.fileName || 'edited_data.csv';
+        const csvContent = this.convertToCSV();
+
+        // Create download
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        // Exit edit mode
+        this.exitEditMode();
+        this.showSuccess(`File "${fileName}" has been saved with your edits!`);
+    }
+
+    cancelEdit() {
+        // Restore original data
+        if (this.originalCsvData && this.originalHeaders) {
+            this.csvData = this.originalCsvData;
+            this.headers = this.originalHeaders;
+
+            // Re-render table with original data
+            this.renderTable();
+        }
+
+        this.exitEditMode();
+        this.showSuccess('Edit cancelled. Original data restored.');
+    }
+
+    exitEditMode() {
+        const tableSection = document.getElementById('tableSection');
+        const editModeControls = document.getElementById('editModeControls');
+        const editTableBtn = document.getElementById('editTableBtn');
+        const editModeIndicator = document.getElementById('editModeIndicator');
+
+        // Remove edit mode styling
+        tableSection.classList.remove('table-editing');
+        editModeControls.classList.add('hidden');
+        editTableBtn.style.display = 'inline-block';
+
+        // Remove edit mode indicator
+        if (editModeIndicator) {
+            editModeIndicator.remove();
+        }
+
+        // Make cells non-editable
+        const table = document.getElementById('csvTable');
+        if (table) {
+            const cells = table.querySelectorAll('td');
+            cells.forEach(cell => {
+                cell.contentEditable = false;
+                cell.className = '';
+            });
+        }
+
+        // Clear stored original data
+        this.originalCsvData = null;
+        this.originalHeaders = null;
+    }
+
+    convertToCSV() {
+        const rows = [this.headers, ...this.csvData];
+        return rows.map(row => row.join(',')).join('\n');
+    }
 }
 
 // Navigation functionality
@@ -3017,6 +3174,7 @@ class NavigationManager {
     }
 
     initializeNavigation() {
+        // Support both slider icons (old) and nav buttons (new)
         const sliderIcons = document.querySelectorAll('.slider-icon');
         sliderIcons.forEach(icon => {
             icon.addEventListener('click', async () => {
@@ -3024,16 +3182,41 @@ class NavigationManager {
                 await this.switchPage(targetPage);
             });
         });
+
+        // New button-based navigation
+        const navButtons = document.querySelectorAll('.nav-btn[data-page]');
+        navButtons.forEach(button => {
+            button.addEventListener('click', async () => {
+                const targetPage = button.getAttribute('data-page');
+                await this.switchPage(targetPage);
+            });
+        });
+
+        // Set initial navigation state for buttons
+        this.setInitialNavState();
+    }
+
+    setInitialNavState() {
+        // Set the Load button as active initially
+        document.querySelector('.nav-btn[data-page="reformat"]')?.classList.add('active');
     }
 
     async switchPage(pageName) {
-        // Update slider icons
+        // Update slider icons (old navigation)
         document.querySelectorAll('.slider-icon').forEach(icon => {
             icon.classList.remove('active');
         });
-        document.querySelector(`.slider-icon[data-page="${pageName}"]`).classList.add('active');
+        const sliderIcon = document.querySelector(`.slider-icon[data-page="${pageName}"]`);
+        if (sliderIcon) sliderIcon.classList.add('active');
 
-        // Update slider thumb position
+        // Update navigation buttons (new navigation)
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        const navButton = document.querySelector(`.nav-btn[data-page="${pageName}"]`);
+        if (navButton) navButton.classList.add('active');
+
+        // Update slider thumb position (old navigation)
         this.updateSliderThumb(pageName);
 
         // Update page content
@@ -8340,13 +8523,353 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 }
 
+
+class MergePageManager {
+    constructor() {
+        this.selectedFiles = [];
+        this.mergedData = null;
+        this.setupEventListeners();
+    }
+
+    setupEventListeners() {
+        // Merge page navigation
+        const mergePageBtn = document.getElementById('mergePageBtn');
+        if (mergePageBtn) {
+            mergePageBtn.addEventListener('click', () => this.showMergePage());
+        }
+
+        // Back button navigation
+        const backToMainBtn = document.getElementById('backToMainBtn');
+        if (backToMainBtn) {
+            backToMainBtn.addEventListener('click', () => this.goBackToMainPages());
+        }
+
+        // File selection
+        const selectMergeFilesBtn = document.getElementById('selectMergeFilesBtn');
+        const mergeFilesInput = document.getElementById('mergeFilesInput');
+        if (selectMergeFilesBtn && mergeFilesInput) {
+            selectMergeFilesBtn.addEventListener('click', () => mergeFilesInput.click());
+            mergeFilesInput.addEventListener('change', (e) => this.handleFileSelection(e));
+        }
+
+        // Merge controls
+        const processMergeBtn = document.getElementById('processMergeBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        if (processMergeBtn) {
+            processMergeBtn.addEventListener('click', () => this.processMerge());
+        }
+        if (clearSelectionBtn) {
+            clearSelectionBtn.addEventListener('click', () => this.clearSelection());
+        }
+
+        // Merge actions
+        const saveMergedFileBtn = document.getElementById('saveMergedFileBtn');
+        const discardMergeBtn = document.getElementById('discardMergeBtn');
+        if (saveMergedFileBtn) {
+            saveMergedFileBtn.addEventListener('click', () => this.saveMergedFile());
+        }
+        if (discardMergeBtn) {
+            discardMergeBtn.addEventListener('click', () => this.discardMerge());
+        }
+    }
+
+    showMergePage() {
+        // Hide all other pages and show merge page using the navigation system
+        document.querySelectorAll('.page-content').forEach(page => {
+            page.classList.remove('active');
+        });
+
+        // Show merge page
+        const mergePage = document.getElementById('mergePage');
+        if (mergePage) {
+            mergePage.classList.add('active');
+        }
+
+        // Set merge button as active
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('mergePageBtn')?.classList.add('active');
+
+        // Update navigation manager's current page
+        if (navigationManager) {
+            navigationManager.currentPage = 'merge';
+        }
+    }
+
+    handleFileSelection(event) {
+        const files = Array.from(event.target.files);
+
+        // Filter for _indiv files (case-insensitive)
+        const individFiles = files.filter(file => file.name.toLowerCase().includes('_indiv'));
+
+        if (individFiles.length === 0) {
+            this.showStatus('No "_indiv" files found in selection. Please select files with "_indiv" in their filename.', 'error');
+            return;
+        }
+
+        this.selectedFiles = [...this.selectedFiles, ...individFiles];
+        this.updateSelectedFilesList();
+        this.toggleProcessButton();
+
+        const selectedContainer = document.getElementById('selectedFilesContainer');
+        if (selectedContainer) {
+            selectedContainer.classList.remove('hidden');
+        }
+    }
+
+    updateSelectedFilesList() {
+        const filesList = document.getElementById('selectedFilesList');
+        if (!filesList) return;
+
+        filesList.innerHTML = '';
+
+        this.selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'selected-file-item';
+            fileItem.innerHTML = `
+                <div class="file-icon">📄</div>
+                <div class="file-info">
+                    <div>
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${(file.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                </div>
+                <button class="remove-file-btn" onclick="mergePageManager.removeFile(${index})">✕</button>
+            `;
+            filesList.appendChild(fileItem);
+        });
+    }
+
+    removeFile(index) {
+        this.selectedFiles.splice(index, 1);
+        this.updateSelectedFilesList();
+        this.toggleProcessButton();
+    }
+
+    toggleProcessButton() {
+        const processMergeBtn = document.getElementById('processMergeBtn');
+        if (processMergeBtn) {
+            processMergeBtn.disabled = this.selectedFiles.length < 2;
+        }
+    }
+
+    clearSelection() {
+        this.selectedFiles = [];
+        this.updateSelectedFilesList();
+        this.toggleProcessButton();
+        this.hideMergePreview();
+        this.hideStatus();
+    }
+
+    async processMerge() {
+        if (this.selectedFiles.length < 2) {
+            this.showStatus('Please select at least 2 files to merge.', 'error');
+            return;
+        }
+
+        this.showStatus('Processing merge...', 'info');
+
+        try {
+            const loadedFiles = await this.loadFilesForMerge();
+            const mergedData = this.performMerge(loadedFiles);
+            this.showMergePreview(mergedData);
+            this.showStatus('Merge preview ready. Review the data and save if correct.', 'success');
+        } catch (error) {
+            this.showStatus(`Error processing merge: ${error.message}`, 'error');
+        }
+    }
+
+    async loadFilesForMerge() {
+        const loadedFiles = [];
+
+        for (const file of this.selectedFiles) {
+            const content = await this.readFileContent(file);
+            const parsedData = this.parseCSV(content);
+
+            // Extract date from first row, first column
+            const dateValue = parsedData.rows.length > 0 ?
+                new Date(parsedData.rows[0][0]).getTime() : 0;
+
+            loadedFiles.push({
+                name: file.name,
+                headers: parsedData.headers,
+                rows: parsedData.rows,
+                dateValue: dateValue
+            });
+        }
+
+        return loadedFiles;
+    }
+
+    readFileContent(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsText(file);
+        });
+    }
+
+    parseCSV(content) {
+        const lines = content.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim());
+        const rows = lines.slice(1).map(line => line.split(',').map(cell => cell.trim()));
+        return { headers, rows };
+    }
+
+    performMerge(loadedFiles) {
+        // Sort files by date value
+        const sortedFiles = loadedFiles.sort((a, b) => a.dateValue - b.dateValue);
+
+        // Use headers from first file
+        const masterHeaders = sortedFiles[0].headers;
+
+        // Combine all rows
+        const mergedRows = [];
+        sortedFiles.forEach(file => {
+            mergedRows.push(...file.rows);
+        });
+
+        this.mergedData = {
+            headers: masterHeaders,
+            rows: mergedRows,
+            sourceFiles: sortedFiles.map(f => f.name),
+            suggestedName: this.generateMergedFileName(sortedFiles)
+        };
+
+        return this.mergedData;
+    }
+
+    generateMergedFileName(sortedFiles) {
+        const baseName = sortedFiles[0].name.replace('_indiv.csv', '');
+        const firstDate = sortedFiles[0].name.match(/\d{4}/)?.[0] || '';
+        const lastDate = sortedFiles[sortedFiles.length - 1].name.match(/\d{4}/)?.[0] || '';
+
+        if (firstDate && lastDate && firstDate !== lastDate) {
+            return `${baseName}_${firstDate}-${lastDate}_merged.csv`;
+        } else {
+            return `${baseName}_merged.csv`;
+        }
+    }
+
+    showMergePreview(mergedData) {
+        const container = document.getElementById('mergePreviewContainer');
+        const previewInfo = document.getElementById('previewInfo');
+        const previewHead = document.getElementById('mergePreviewHead');
+        const previewBody = document.getElementById('mergePreviewBody');
+
+        if (!container || !previewInfo || !previewHead || !previewBody) return;
+
+        container.classList.remove('hidden');
+
+        // Update preview info
+        previewInfo.textContent = `${mergedData.rows.length} rows from ${mergedData.sourceFiles.length} files`;
+
+        // Build preview table
+        previewHead.innerHTML = '';
+        previewBody.innerHTML = '';
+
+        // Add headers
+        const headerRow = document.createElement('tr');
+        mergedData.headers.forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header;
+            headerRow.appendChild(th);
+        });
+        previewHead.appendChild(headerRow);
+
+        // Add all rows for complete preview
+        mergedData.rows.forEach(row => {
+            const tr = document.createElement('tr');
+            row.forEach(cell => {
+                const td = document.createElement('td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            previewBody.appendChild(tr);
+        });
+    }
+
+    hideMergePreview() {
+        const container = document.getElementById('mergePreviewContainer');
+        if (container) {
+            container.classList.add('hidden');
+        }
+    }
+
+    saveMergedFile() {
+        if (!this.mergedData) {
+            this.showStatus('No merged data available to save.', 'error');
+            return;
+        }
+
+        try {
+            const csvContent = this.convertToCSV(this.mergedData);
+            this.downloadFile(csvContent, this.mergedData.suggestedName);
+            this.showStatus(`File saved as "${this.mergedData.suggestedName}"`, 'success');
+        } catch (error) {
+            this.showStatus(`Error saving file: ${error.message}`, 'error');
+        }
+    }
+
+    convertToCSV(data) {
+        const rows = [data.headers, ...data.rows];
+        return rows.map(row => row.join(',')).join('\n');
+    }
+
+    downloadFile(content, filename) {
+        const blob = new Blob([content], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }
+
+    discardMerge() {
+        this.mergedData = null;
+        this.hideMergePreview();
+        this.showStatus('Merge discarded. You can select new files to merge.', 'info');
+    }
+
+    goBackToMainPages() {
+        // Return to the reformat page (default)
+        if (navigationManager) {
+            navigationManager.switchPage('reformat');
+        }
+    }
+
+    showStatus(message, type = 'info') {
+        const container = document.getElementById('mergeStatusContainer');
+        const messageEl = document.getElementById('mergeStatusMessage');
+
+        if (!container || !messageEl) return;
+
+        container.classList.remove('hidden');
+        messageEl.textContent = message;
+        messageEl.className = `status-message ${type}`;
+    }
+
+    hideStatus() {
+        const container = document.getElementById('mergeStatusContainer');
+        if (container) {
+            container.classList.add('hidden');
+        }
+    }
+}
+
 // Initialize the CSV Manager and Navigation when the page loads
 let csvManager;
 let navigationManager;
+let mergePageManager;
 document.addEventListener('DOMContentLoaded', () => {
     csvManager = new CSVManager();
     navigationManager = new NavigationManager();
-
+    mergePageManager = new MergePageManager();
     // Hook into csvManager's file loading to update plot page
     const originalUpdateFileBrowser = csvManager.updateFileBrowser;
     csvManager.updateFileBrowser = function(files) {
@@ -8357,5 +8880,4 @@ document.addEventListener('DOMContentLoaded', () => {
             navigationManager.updatePlotPageFileInfo().catch(console.error);
         }
     };
-
 });
