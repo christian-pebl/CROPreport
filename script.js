@@ -5904,7 +5904,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                         const filteredMeasurements = this.filterStationMeasurementsBySubset(stationMeasurements, selectedVariable);
 
                         // Convert to aggregated format with box plot statistics
-                        aggregatedData = Object.entries(filteredMeasurements).map(([station, measurements]) => {
+                        const stationDateMap = this.buildStationDateMap(rawData);
+                        const sortedStations = this.sortStationsByTime(Object.keys(filteredMeasurements), stationDateMap);
+                        aggregatedData = sortedStations.map(station => {
+                            const measurements = filteredMeasurements[station];
                             const values = measurements.map(m => m.value).sort((a, b) => a - b);
 
                             if (values.length === 0) return null;
@@ -6278,7 +6281,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         stations.forEach((station, index) => {
             const x = getX(index);
             ctx.save();
-            ctx.translate(x, padding + chartHeight + 20);
+            ctx.translate(x, padding + chartHeight + 15);
             ctx.rotate(-Math.PI / 4);
             ctx.textAlign = 'right';
             ctx.fillText(station, 0, 0);
@@ -7004,6 +7007,71 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return cleaned;
     }
 
+    // ===== TIME-BASED SORTING SYSTEM =====
+
+    parseDateFromRow(row) {
+        const dateField = row['Date'] || row.date || row['date'] || row.Date;
+
+        if (!dateField || typeof dateField !== 'string') {
+            return null;
+        }
+
+        // Handle DD/MM/YY format (e.g., "25/03/25")
+        const ddmmyy = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(dateField.trim());
+        if (ddmmyy) {
+            const [, day, month, year] = ddmmyy;
+            // Convert 2-digit year to 4-digit (assuming 20xx)
+            const fullYear = parseInt(year) + 2000;
+            return new Date(fullYear, parseInt(month) - 1, parseInt(day));
+        }
+
+        // Handle DD/MM/YYYY format
+        const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateField.trim());
+        if (ddmmyyyy) {
+            const [, day, month, year] = ddmmyyyy;
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        }
+
+        // Fallback: try native Date parsing
+        const fallbackDate = new Date(dateField);
+        return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+    }
+
+    buildStationDateMap(data) {
+        const stationDates = {};
+
+        data.forEach(row => {
+            const sampleId = row['sample ID'] || row.sampleId || row.sample_id;
+            const dateValue = this.parseDateFromRow(row);
+
+            if (!sampleId) return;
+
+            if (dateValue) {
+                if (!stationDates[sampleId] || dateValue < stationDates[sampleId]) {
+                    stationDates[sampleId] = dateValue;
+                }
+            }
+        });
+
+        return stationDates;
+    }
+
+    sortStationsByTime(stations, stationDateMap) {
+        return stations.sort((a, b) => {
+            const dateA = stationDateMap[a];
+            const dateB = stationDateMap[b];
+
+            // Both have dates - sort by time
+            if (dateA && dateB) {
+                const timeDiff = dateA.getTime() - dateB.getTime();
+                if (timeDiff !== 0) return timeDiff;
+            }
+
+            // One or both missing dates, or dates are equal - sort alphabetically
+            return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+        });
+    }
+
     aggregateBladeCountData(data) {
         const grouped = {};
         const stationSet = new Set();
@@ -7020,10 +7088,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             grouped[key] = (grouped[key] || 0) + 1;
         });
 
-        // Convert to structured format
-        const stations = Array.from(stationSet).sort((a, b) =>
-            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-        );
+        // Convert to structured format with time-based sorting
+        const stationDateMap = this.buildStationDateMap(data);
+        const stations = this.sortStationsByTime(Array.from(stationSet), stationDateMap);
+
+        console.log('🕒 Station sorting by time:', stations.map(s => ({
+            station: s,
+            date: stationDateMap[s] ? stationDateMap[s].toISOString().split('T')[0] : 'no date'
+        })));
 
         const result = stations.map(station => {
             const smallCount = grouped[`${station}_small`] || 0;
@@ -7569,10 +7641,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 return [];
             }
 
-            // Process each station to calculate box plot statistics
-            const stations = Object.keys(stationMeasurements).sort((a, b) =>
-                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-            );
+            const stationDateMap = this.buildStationDateMap(rawData);
+            const stations = this.sortStationsByTime(Object.keys(stationMeasurements), stationDateMap);
+
+            console.log('🕒 Length chart station sorting by time:', stations.map(s => ({
+                station: s,
+                date: stationDateMap[s] ? stationDateMap[s].toISOString().split('T')[0] : 'no date'
+            })));
 
             console.log(`🎯 AGGREGATION PHASE: Processing ${stations.length} stations from ${filename}`);
             console.log(`📍 Stations found: ${stations.join(', ')}`);
@@ -7799,23 +7874,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             const chartContainer = document.createElement('div');
             chartContainer.style.marginTop = '20px';
 
-            // Add chart type indicator
-            const chartTypeIndicator = document.createElement('div');
-            chartTypeIndicator.style.cssText = `
-                background: ${hasSDData ? '#f0f9ff' : '#f8fafc'};
-                border: 1px solid ${hasSDData ? '#0ea5e9' : '#64748b'};
-                border-radius: 6px;
-                padding: 10px;
-                margin-bottom: 15px;
-                text-align: center;
-                font-size: 13px;
-                color: ${hasSDData ? '#0369a1' : '#475569'};
-            `;
-            chartTypeIndicator.innerHTML = `
-                <strong>📊 Chart Type:</strong> ${chartType}
-                ${hasSDData ? '<br><small>Error bars show ±1 standard deviation</small>' : '<br><small>SD data not available - showing averages only</small>'}
-            `;
-            chartContainer.appendChild(chartTypeIndicator);
 
             // Create canvas with error handling
             const canvas = document.createElement('canvas');
@@ -8155,11 +8213,15 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 ctx.fillText(station.avgLength.toFixed(1), centerX, canvas.height - padding - barHeight - 5);
             }
 
-            // Station label (horizontal)
+            // Station label (rotated 45 degrees)
+            ctx.save();
+            ctx.translate(centerX, canvas.height - padding + 15);
+            ctx.rotate(-Math.PI / 4);
             ctx.fillStyle = '#374151';
             ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(station.station, centerX, canvas.height - padding + 15);
+            ctx.textAlign = 'right';
+            ctx.fillText(station.station, 0, 0);
+            ctx.restore();
         });
 
         // Draw axes
