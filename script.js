@@ -6272,13 +6272,17 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             });
         }
 
-        // Draw X-axis labels (station names)
+        // Draw X-axis labels (station names) - rotated 45 degrees and moved down 5 points
         ctx.fillStyle = '#374151';
         ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-        ctx.textAlign = 'center';
         stations.forEach((station, index) => {
             const x = getX(index);
-            ctx.fillText(station, x, padding + chartHeight + 20);
+            ctx.save();
+            ctx.translate(x, padding + chartHeight + 20);
+            ctx.rotate(-Math.PI / 4);
+            ctx.textAlign = 'right';
+            ctx.fillText(station, 0, 0);
+            ctx.restore();
         });
 
         // Add chart title
@@ -6302,7 +6306,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#374151';
         ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 50);
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 55);
 
         console.log('✅ Chart drawing completed');
     }
@@ -7213,7 +7217,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#555';
         ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Station', canvas.width / 2, canvas.height - padding + 45);
+        ctx.fillText('Station', canvas.width / 2, canvas.height - padding + 50);
 
         ctx.save();
         ctx.translate(35, canvas.height / 2);
@@ -7847,18 +7851,84 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 chartContainer.appendChild(errorDiv);
             }
 
+            // Add toggle buttons for chart/table view
+            const toggleContainer = document.createElement('div');
+            toggleContainer.style.cssText = `
+                display: flex;
+                gap: 10px;
+                margin-bottom: 15px;
+                justify-content: center;
+            `;
+
+            const chartBtn = document.createElement('button');
+            chartBtn.textContent = '📊 Chart';
+            chartBtn.style.cssText = `
+                padding: 8px 16px;
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+
+            const tableBtn = document.createElement('button');
+            tableBtn.textContent = '📋 Table';
+            tableBtn.style.cssText = `
+                padding: 8px 16px;
+                background: #6b7280;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+
+            toggleContainer.appendChild(chartBtn);
+            toggleContainer.appendChild(tableBtn);
+            chartContainer.appendChild(toggleContainer);
+
             // Clear loading message and add chart
             outputDiv.innerHTML = '';
             outputDiv.appendChild(chartContainer);
 
-            // Add enhanced summary table with SD information
-            try {
-                this.addEnhancedLengthSummaryTable(aggregatedData, selectedVariable, outputDiv);
-            } catch (tableError) {
-                console.error('❌ Error creating summary table:', tableError);
-                // Fallback to original table
-                this.addLengthSummaryTable(aggregatedData, selectedVariable, outputDiv);
-            }
+            // Add event listeners for toggle buttons
+            chartBtn.addEventListener('click', () => {
+                canvas.style.display = 'block';
+                const table = chartContainer.querySelector('table');
+                if (table) table.style.display = 'none';
+
+                chartBtn.style.background = '#3b82f6';
+                tableBtn.style.background = '#6b7280';
+            });
+
+            tableBtn.addEventListener('click', () => {
+                // Create table if it doesn't exist
+                let table = chartContainer.querySelector('table');
+                if (!table) {
+                    try {
+                        const tempDiv = document.createElement('div');
+                        this.addEnhancedLengthSummaryTable(aggregatedData, selectedVariable, tempDiv);
+                        table = tempDiv.firstChild;
+                        table.style.display = 'none';
+                        chartContainer.appendChild(table);
+                    } catch (tableError) {
+                        console.error('❌ Error creating summary table:', tableError);
+                        // Fallback to original table
+                        const tempDiv = document.createElement('div');
+                        this.addLengthSummaryTable(aggregatedData, selectedVariable, tempDiv);
+                        table = tempDiv.firstChild;
+                        table.style.display = 'none';
+                        chartContainer.appendChild(table);
+                    }
+                }
+
+                canvas.style.display = 'none';
+                table.style.display = 'table';
+
+                tableBtn.style.background = '#3b82f6';
+                chartBtn.style.background = '#6b7280';
+            });
 
         } catch (error) {
             console.error('❌ Error in renderLengthDistributionChart:', error);
@@ -8085,15 +8155,11 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 ctx.fillText(station.avgLength.toFixed(1), centerX, canvas.height - padding - barHeight - 5);
             }
 
-            // Station label (rotated)
-            ctx.save();
-            ctx.translate(centerX, canvas.height - padding + 15);
-            ctx.rotate(-Math.PI / 4);
+            // Station label (horizontal)
             ctx.fillStyle = '#374151';
             ctx.font = '11px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
-            ctx.textAlign = 'right';
-            ctx.fillText(station.station, 0, 0);
-            ctx.restore();
+            ctx.textAlign = 'center';
+            ctx.fillText(station.station, centerX, canvas.height - padding + 15);
         });
 
         // Draw axes
@@ -8150,7 +8216,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#374151';
         ctx.font = '12px "Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 50);
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 55);
 
         // Add legend for box plots - REMOVED
         // if (hasBoxPlots) {
@@ -8490,33 +8556,6 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         tableContainer.appendChild(table);
 
-        // Add summary statistics
-        if (hasBoxPlots) {
-            const summaryDiv = document.createElement('div');
-            summaryDiv.style.cssText = `
-                margin-top: 15px;
-                padding: 12px;
-                background: #f0f9ff;
-                border: 1px solid #0ea5e9;
-                border-radius: 6px;
-                font-size: 12px;
-                color: #0369a1;
-            `;
-
-            const totalMeasurements = data.reduce((sum, d) => sum + (d.statistics?.count || 0), 0);
-            const totalOutliers = data.reduce((sum, d) => sum + (d.statistics?.outliers.length || 0), 0);
-            const avgMedian = data.reduce((sum, d) => sum + (d.statistics?.median || 0), 0) / data.length;
-
-            summaryDiv.innerHTML = `
-                <strong>📊 Box Plot Summary:</strong><br>
-                • Total individual measurements: ${totalMeasurements}<br>
-                • Average median across stations: ${avgMedian.toFixed(2)} cm<br>
-                • Total outliers detected: ${totalOutliers}<br>
-                • Data source: Individual blade measurements
-            `;
-
-            tableContainer.appendChild(summaryDiv);
-        }
 
         outputDiv.appendChild(tableContainer);
         console.log('✅ Enhanced box plot summary table created successfully');
