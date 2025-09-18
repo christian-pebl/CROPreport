@@ -8863,12 +8863,35 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return selectedRadio ? [selectedRadio.value] : [];
     }
 
+    createChemicalStationDateMap(fileData) {
+        // Create date mapping for chemical data similar to blade count
+        const stationDateMap = {};
+
+        fileData.data.forEach(row => {
+            const sample = row[0]; // Sample name (column 0)
+            const dateStr = row[1]; // Date (column 1)
+
+            if (sample && dateStr) {
+                try {
+                    // Parse date from chemical data
+                    const date = new Date(dateStr);
+                    if (!isNaN(date.getTime())) {
+                        stationDateMap[sample] = date;
+                    }
+                } catch (e) {
+                    console.warn(`Could not parse date for sample ${sample}: ${dateStr}`);
+                }
+            }
+        });
+
+        return stationDateMap;
+    }
+
     renderChemicalVariablesChart(fileData, selectedVariables, outputDiv) {
-        // Extract sample names (column 0) and skip date (column 1)
+        // Create professional canvas-based chart like blade count
         const sampleNames = fileData.data.map(row => row[0]);
         const headers = fileData.headers.slice(2); // Skip Sample and Date columns
 
-        // For simplicity, let's plot only the first selected variable as a column chart
         const selectedVariable = selectedVariables[0];
         const columnIndex = headers.indexOf(selectedVariable);
 
@@ -8883,39 +8906,437 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return parseFloat(value) || 0;
         });
 
-        // Create a simple HTML table/chart
-        const chartHTML = `
-            <div style="background: white; border: 1px solid #e0e6ed; border-radius: 6px; padding: 20px;">
-                <h3 style="text-align: center; margin-bottom: 20px; color: #333;">${selectedVariable}</h3>
-                <div style="display: flex; align-items: end; justify-content: space-around; height: 300px; border-bottom: 2px solid #333; padding: 10px;">
-                    ${sampleNames.map((sample, index) => {
-                        const value = values[index];
-                        const maxValue = Math.max(...values);
-                        const height = maxValue > 0 ? (value / maxValue) * 250 : 0;
-                        return `
-                            <div style="display: flex; flex-direction: column; align-items: center; margin: 0 5px;">
-                                <div style="background: #1f77b4; width: 60px; height: ${height}px; margin-bottom: 5px; border-radius: 3px; display: flex; align-items: end; justify-content: center; color: white; font-size: 10px; padding: 2px;">
-                                    ${value}
-                                </div>
-                                <div style="writing-mode: vertical-lr; transform: rotate(180deg); font-size: 11px; color: #666; max-width: 60px; text-align: center;">
-                                    ${sample}
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-                <div style="margin-top: 15px; padding: 10px; background: #f9fafb; border-radius: 4px; font-size: 0.85rem;">
-                    <strong>Summary:</strong><br>
-                    • Variable: ${selectedVariable}<br>
-                    • Samples: ${sampleNames.length}<br>
-                    • Max value: ${Math.max(...values).toFixed(2)}<br>
-                    • Min value: ${Math.min(...values).toFixed(2)}<br>
-                    • Data source: ${fileData.name}
-                </div>
-            </div>
-        `;
+        // Create station-date mapping for professional labeling
+        const stationDateMap = this.createChemicalStationDateMap(fileData);
 
-        outputDiv.innerHTML = chartHTML;
+        // Prepare chart data
+        const chartData = sampleNames.map((sample, index) => ({
+            sample: sample,
+            value: values[index]
+        }));
+
+        // Create professional canvas chart
+        this.renderChemicalVariablesCanvasChart(chartData, selectedVariable, outputDiv, stationDateMap);
+    }
+
+    renderChemicalVariablesCanvasChart(data, selectedVariable, outputDiv, stationDateMap) {
+        // Create canvas with adaptive width for many data points
+        const canvas = document.createElement('canvas');
+        const dataCount = data.length;
+        const minCanvasWidth = 600;
+        const maxCanvasWidth = 1200;
+        const padding = 160; // Space for labels and margins
+
+        // Adaptive width calculation based on data count
+        let dynamicWidth;
+        if (dataCount <= 6) {
+            // Few points: give them generous space (60px each)
+            dynamicWidth = Math.max(minCanvasWidth, dataCount * 60 + padding);
+        } else if (dataCount <= 15) {
+            // Medium points: moderate space (40px each)
+            dynamicWidth = Math.max(minCanvasWidth, dataCount * 40 + padding);
+        } else {
+            // Many points: compact but readable (25px minimum, scale to fit max width)
+            const idealWidth = dataCount * 25 + padding;
+            dynamicWidth = Math.min(idealWidth, maxCanvasWidth);
+        }
+
+        canvas.width = dynamicWidth;
+        canvas.height = 400; // Standard height
+
+        // Apply professional styling from blade count
+        canvas.style.border = '1px solid #ddd';
+        canvas.style.borderRadius = '4px';
+        canvas.style.backgroundColor = '#ffffff';
+        canvas.style.display = 'block';
+        canvas.style.margin = '10px auto';
+
+        // Create chart container
+        outputDiv.innerHTML = '';
+        const chartContainer = document.createElement('div');
+        chartContainer.style.textAlign = 'center';
+        chartContainer.style.marginTop = '20px';
+
+        const title = document.createElement('h3');
+        title.textContent = `Chemical Analysis: ${selectedVariable}`;
+        title.style.marginBottom = '10px';
+        chartContainer.appendChild(title);
+        chartContainer.appendChild(canvas);
+        outputDiv.appendChild(chartContainer);
+
+        // Draw the professional chart
+        this.drawChemicalColumnChart(canvas, data, stationDateMap, selectedVariable);
+
+        // Add summary table like blade count
+        this.addChemicalSummaryTable(data, selectedVariable, outputDiv);
+    }
+
+    drawChemicalColumnChart(canvas, data, stationDateMap, selectedVariable) {
+        const ctx = canvas.getContext('2d');
+        const padding = 80;
+        const chartWidth = canvas.width - 2 * padding;
+        const chartHeight = canvas.height - 2 * padding;
+
+        // Clear canvas with white background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add chart title - left aligned above plot area like blade count
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${selectedVariable} by Sample`, padding, 50);
+
+        if (data.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        // Calculate max value for scaling with 10% buffer like blade count
+        const maxDataValue = Math.max(...data.map(d => d.value));
+        const maxValue = maxDataValue * 1.1;  // Add 10% buffer
+        const yScale = chartHeight / maxValue;
+
+        // Simplified bar sizing - consistent approach
+        const totalBars = data.length;
+        const availableWidth = chartWidth;
+        const barUnit = availableWidth / totalBars;
+
+        // Consistent bar width ratio with minimum size
+        const barWidth = Math.max(barUnit * 0.75, 6); // Minimum 6px width
+        const barSpacing = barUnit * 0.25;
+
+        // Professional color scheme - use chemical blue
+        const chemColor = '#1f77b4';  // Same blue as blade count
+
+        // Determine decimal places based on data range for adaptive precision
+        const getDecimalPlaces = (maxVal) => {
+            if (maxVal >= 10) return 0;
+            if (maxVal >= 1) return 1;
+            if (maxVal >= 0.1) return 1;
+            if (maxVal >= 0.01) return 2;
+            return 3; // For very small values
+        };
+
+        const decimalPlaces = getDecimalPlaces(maxDataValue);
+
+        // Draw gridlines first (behind bars) - horizontal and vertical like blade count
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 4]);
+
+        // Horizontal gridlines
+        for (let i = 1; i <= 5; i++) {
+            const y = canvas.height - padding - (chartHeight / 5) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(canvas.width - padding, y);
+            ctx.stroke();
+        }
+
+        // Vertical gridlines (simplified for clarity)
+        for (let i = 0; i <= totalBars; i++) {
+            const x = padding + i * barUnit;
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, canvas.height - padding);
+            ctx.stroke();
+        }
+
+        ctx.setLineDash([]);
+
+        // Draw bars
+        console.log(`Drawing ${data.length} bars...`);
+        data.forEach((sample, index) => {
+            const x = padding + index * barUnit + barSpacing / 2;
+            const barHeight = sample.value * yScale;
+
+            console.log(`Bar ${index + 1}: x=${x.toFixed(1)}, width=${barWidth.toFixed(1)}, height=${barHeight.toFixed(1)}`);
+
+            // Draw chemical value bar
+            ctx.fillStyle = chemColor;
+            ctx.fillRect(x, canvas.height - padding - barHeight, barWidth, barHeight);
+
+            // Sample label with date (adaptive formatting for many data points)
+            ctx.fillStyle = '#666';
+
+            // Adaptive label font size and rotation based on data count
+            let labelFontSize = 11;
+            let rotationAngle = -Math.PI / 4; // Default -45 degrees
+
+            if (totalBars > 30) {
+                labelFontSize = 8;
+                rotationAngle = -Math.PI / 2; // Vertical for many points
+            } else if (totalBars > 15) {
+                labelFontSize = 9;
+                rotationAngle = -Math.PI / 3; // Steeper angle
+            }
+
+            ctx.font = `${labelFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+            ctx.textAlign = 'center';
+
+            ctx.save();
+            ctx.translate(x + barWidth / 2, canvas.height - padding + 25);
+            ctx.rotate(rotationAngle);
+
+            const labelData = this.formatStationLabelWithDate(sample.sample, stationDateMap);
+
+            // For many points, show only sample name to save space
+            if (totalBars > 25) {
+                ctx.fillText(labelData.line1, 0, 0);
+            } else {
+                ctx.fillText(labelData.line1, 0, 0);        // Sample name
+                if (labelData.line2) {
+                    ctx.fillText(labelData.line2, 0, 12);    // Date (DD/MM/YY)
+                }
+            }
+            ctx.restore();
+
+            // Value label on top of bar with adaptive precision
+            if (barHeight > 15) { // Show for smaller bars too with adaptive sizing
+                ctx.fillStyle = '#fff';
+
+                // Adaptive font size based on bar width and data count
+                let fontSize = 10;
+                if (totalBars > 20) {
+                    fontSize = Math.max(8, Math.min(10, barWidth / 3));
+                } else if (totalBars > 10) {
+                    fontSize = 9;
+                }
+
+                ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                ctx.textAlign = 'center';
+
+                // Use precision based on the lowest decimal place in the dataset
+                const datasetPrecision = this.calculateDatasetPrecision(data.map(d => d.value));
+                const displayValue = sample.value.toFixed(datasetPrecision);
+
+                // Only show label if there's enough space
+                if (barWidth >= 15 || totalBars <= 20) {
+                    ctx.fillText(displayValue, x + barWidth / 2, canvas.height - padding - barHeight + 15);
+                }
+            }
+        });
+
+        // Draw axes - complete rectangle around plot area like blade count
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        // Left axis
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, canvas.height - padding);
+        // Bottom axis
+        ctx.lineTo(canvas.width - padding, canvas.height - padding);
+        // Right axis
+        ctx.lineTo(canvas.width - padding, padding);
+        // Top axis
+        ctx.lineTo(padding, padding);
+        ctx.stroke();
+
+        // Y-axis labels with adaptive precision for small values
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+
+        for (let i = 0; i <= 5; i++) {
+            const value = (maxValue / 5) * i;
+            const y = canvas.height - padding - (chartHeight / 5) * i;
+            ctx.fillText(value.toFixed(decimalPlaces), padding - 10, y + 3);
+        }
+
+        // Modern axis labels - closer to axes like blade count
+        ctx.fillStyle = '#555';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Sample', canvas.width / 2, canvas.height - padding + 60);
+
+        ctx.save();
+        ctx.translate(35, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(`${selectedVariable}`, 0, 0);
+        ctx.restore();
+    }
+
+    calculateDatasetPrecision(values) {
+        // Find the minimum number of decimal places needed to represent all values
+        let maxPrecision = 0;
+
+        values.forEach(value => {
+            if (value === 0) return; // Skip zeros
+
+            // Convert to string and find decimal places
+            const valueStr = value.toString();
+            if (valueStr.includes('.')) {
+                const decimalPart = valueStr.split('.')[1];
+                // Remove trailing zeros
+                const trimmed = decimalPart.replace(/0+$/, '');
+                maxPrecision = Math.max(maxPrecision, trimmed.length);
+            }
+        });
+
+        // Cap at reasonable limits
+        return Math.min(Math.max(maxPrecision, 1), 4);
+    }
+
+    addChemicalSummaryTable(data, selectedVariable, outputDiv) {
+        const tableContainer = document.createElement('div');
+        tableContainer.style.marginTop = '20px';
+
+        const tableTitle = document.createElement('h4');
+        tableTitle.textContent = 'Chemical Analysis Summary';
+        tableTitle.style.marginBottom = '10px';
+        tableTitle.style.color = '#555';
+        tableContainer.appendChild(tableTitle);
+
+        // Calculate statistics
+        const values = data.map(d => d.value);
+        const minValue = Math.min(...values);
+        const maxValue = Math.max(...values);
+        const avgValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+        const medianValue = [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+
+        // Determine decimal places for table display based on data range
+        const getTableDecimalPlaces = (maxVal) => {
+            if (maxVal >= 10) return 1;
+            if (maxVal >= 1) return 2;
+            if (maxVal >= 0.1) return 2;
+            if (maxVal >= 0.01) return 3;
+            return 4; // For very small values
+        };
+
+        const tableDecimalPlaces = getTableDecimalPlaces(maxValue);
+
+        // Create professional table like blade count
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.marginTop = '10px';
+        table.style.backgroundColor = '#fff';
+        table.style.border = '1px solid #ddd';
+        table.style.borderRadius = '6px';
+        table.style.overflow = 'hidden';
+
+        // Table header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.style.backgroundColor = '#f8f9fa';
+
+        const headers = ['Sample', selectedVariable, 'Date', 'Relative %'];
+        headers.forEach(headerText => {
+            const th = document.createElement('th');
+            th.textContent = headerText;
+            th.style.padding = '12px 8px';
+            th.style.borderBottom = '2px solid #dee2e6';
+            th.style.fontWeight = 'bold';
+            th.style.color = '#495057';
+            th.style.fontSize = '0.875rem';
+            th.style.textAlign = 'left';
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Table body with data
+        const tbody = document.createElement('tbody');
+        data.forEach((item, index) => {
+            const row = document.createElement('tr');
+            if (index % 2 === 0) {
+                row.style.backgroundColor = '#f8f9fa';
+            }
+
+            // Sample name
+            const sampleCell = document.createElement('td');
+            sampleCell.textContent = item.sample;
+            sampleCell.style.padding = '10px 8px';
+            sampleCell.style.borderBottom = '1px solid #dee2e6';
+            sampleCell.style.fontWeight = '500';
+            row.appendChild(sampleCell);
+
+            // Value
+            const valueCell = document.createElement('td');
+            valueCell.textContent = item.value.toFixed(tableDecimalPlaces);
+            valueCell.style.padding = '10px 8px';
+            valueCell.style.borderBottom = '1px solid #dee2e6';
+            valueCell.style.textAlign = 'right';
+            valueCell.style.fontFamily = 'monospace';
+            row.appendChild(valueCell);
+
+            // Date
+            const dateCell = document.createElement('td');
+            // Extract date from chemical data if available
+            const dateStr = data.length > index && data[index].date ?
+                new Date(data[index].date).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: '2-digit'
+                }) : 'N/A';
+            dateCell.textContent = dateStr;
+            dateCell.style.padding = '10px 8px';
+            dateCell.style.borderBottom = '1px solid #dee2e6';
+            dateCell.style.fontSize = '0.875rem';
+            dateCell.style.color = '#6c757d';
+            row.appendChild(dateCell);
+
+            // Relative percentage
+            const relativeCell = document.createElement('td');
+            const relativePercent = maxValue > 0 ? ((item.value / maxValue) * 100).toFixed(1) : '0';
+            relativeCell.textContent = `${relativePercent}%`;
+            relativeCell.style.padding = '10px 8px';
+            relativeCell.style.borderBottom = '1px solid #dee2e6';
+            relativeCell.style.textAlign = 'right';
+            relativeCell.style.fontSize = '0.875rem';
+            relativeCell.style.color = '#6c757d';
+            row.appendChild(relativeCell);
+
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        // Statistics summary
+        const statsContainer = document.createElement('div');
+        statsContainer.style.marginTop = '15px';
+        statsContainer.style.padding = '15px';
+        statsContainer.style.backgroundColor = '#f8f9fa';
+        statsContainer.style.borderRadius = '6px';
+        statsContainer.style.border = '1px solid #dee2e6';
+
+        const statsTitle = document.createElement('h5');
+        statsTitle.textContent = 'Statistical Summary';
+        statsTitle.style.margin = '0 0 10px 0';
+        statsTitle.style.color = '#495057';
+        statsContainer.appendChild(statsTitle);
+
+        const statsGrid = document.createElement('div');
+        statsGrid.style.display = 'grid';
+        statsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
+        statsGrid.style.gap = '10px';
+
+        const stats = [
+            { label: 'Samples', value: data.length },
+            { label: 'Minimum', value: minValue.toFixed(tableDecimalPlaces) },
+            { label: 'Maximum', value: maxValue.toFixed(tableDecimalPlaces) },
+            { label: 'Average', value: avgValue.toFixed(tableDecimalPlaces) },
+            { label: 'Median', value: medianValue.toFixed(tableDecimalPlaces) },
+            { label: 'Range', value: (maxValue - minValue).toFixed(tableDecimalPlaces) }
+        ];
+
+        stats.forEach(stat => {
+            const statItem = document.createElement('div');
+            statItem.innerHTML = `<strong>${stat.label}:</strong> ${stat.value}`;
+            statItem.style.fontSize = '0.875rem';
+            statItem.style.color = '#495057';
+            statsGrid.appendChild(statItem);
+        });
+
+        statsContainer.appendChild(statsGrid);
+
+        tableContainer.appendChild(table);
+        tableContainer.appendChild(statsContainer);
+        outputDiv.appendChild(tableContainer);
     }
 
     getChartColor(index) {
@@ -9041,15 +9462,61 @@ class MergePageManager {
     handleFileSelection(event) {
         const files = Array.from(event.target.files);
 
-        // Filter for _indiv files (case-insensitive)
-        const individFiles = files.filter(file => file.name.toLowerCase().includes('_indiv'));
+        console.log('🔍 FILE SELECTION DEBUG:');
+        console.log(`📁 Total files selected: ${files.length}`);
+        files.forEach((file, index) => {
+            console.log(`  ${index + 1}. ${file.name}`);
+        });
 
-        if (individFiles.length === 0) {
-            this.showStatus('No "_indiv" files found in selection. Please select files with "_indiv" in their filename.', 'error');
+        // Group files by suffix to find matching sets
+        const fileGroups = this.groupFilesBySuffix(files);
+
+        console.log('📂 File groups by suffix:', fileGroups);
+        Object.keys(fileGroups).forEach(suffix => {
+            console.log(`  Suffix "${suffix}": ${fileGroups[suffix].length} files`);
+            fileGroups[suffix].forEach((file, index) => {
+                console.log(`    ${index + 1}. ${file.name}`);
+            });
+        });
+
+        // Find the largest group with matching suffixes (most common file type)
+        const validFiles = this.selectMatchingSuffixFiles(fileGroups);
+
+        console.log('✅ Selected valid files:', validFiles.map(f => f.name));
+
+        if (validFiles.length === 0) {
+            this.showStatus('No files with matching suffixes found. Please select files that share a common suffix (e.g., _indiv, _raw, _chem, etc.).', 'error');
+            console.log('❌ No valid files found - no matching suffixes');
             return;
         }
 
-        this.selectedFiles = [...this.selectedFiles, ...individFiles];
+        if (validFiles.length < 2) {
+            const detectedSuffix = this.extractSuffix(validFiles[0]?.name || 'unknown');
+
+            // Create detailed error message with UI logging
+            let errorDetails = `Only ${validFiles.length} file with suffix "${detectedSuffix}" found.\n\n`;
+            errorDetails += `DEBUG INFO:\n`;
+            errorDetails += `Total files selected: ${files.length}\n`;
+
+            // Show what suffix was detected for each file
+            files.forEach((file, index) => {
+                const suffix = this.extractSuffix(file.name);
+                errorDetails += `${index + 1}. ${file.name} → suffix: "${suffix}"\n`;
+            });
+
+            errorDetails += `\nFile groups found:\n`;
+            Object.keys(fileGroups).forEach(suffix => {
+                errorDetails += `"${suffix}": ${fileGroups[suffix].length} files\n`;
+            });
+
+            errorDetails += `\nPlease ensure all files have the same suffix pattern (e.g., _chem, _indiv, _raw).`;
+
+            this.showStatus(errorDetails, 'error');
+            console.log(`❌ Insufficient files: only ${validFiles.length} file(s) with suffix "${detectedSuffix}"`);
+            return;
+        }
+
+        this.selectedFiles = [...this.selectedFiles, ...validFiles];
         this.updateSelectedFilesList();
         this.toggleProcessButton();
 
@@ -9057,6 +9524,97 @@ class MergePageManager {
         if (selectedContainer) {
             selectedContainer.classList.remove('hidden');
         }
+
+        // Show which suffix was detected
+        const detectedSuffix = this.extractSuffix(validFiles[0].name);
+        this.showStatus(`Detected ${validFiles.length} files with suffix "${detectedSuffix}" ready for merging.`, 'success');
+        console.log(`✅ Success: ${validFiles.length} files with suffix "${detectedSuffix}" ready for merging`);
+    }
+
+    groupFilesBySuffix(files) {
+        const groups = {};
+
+        console.log('🔍 GROUPING FILES BY SUFFIX:');
+
+        files.forEach((file, index) => {
+            console.log(`  Processing file ${index + 1}: ${file.name}`);
+
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                console.log(`    ❌ Skipped: Not a CSV file`);
+                return;
+            }
+
+            const suffix = this.extractSuffix(file.name);
+            console.log(`    🏷️ Detected suffix: "${suffix}"`);
+
+            if (suffix) {
+                if (!groups[suffix]) {
+                    groups[suffix] = [];
+                    console.log(`    📁 Created new group for suffix: "${suffix}"`);
+                }
+                groups[suffix].push(file);
+                console.log(`    ✅ Added to group "${suffix}" (now has ${groups[suffix].length} files)`);
+            } else {
+                console.log(`    ❌ No suffix detected - file ignored`);
+            }
+        });
+
+        console.log('📊 Final grouping summary:');
+        Object.keys(groups).forEach(suffix => {
+            console.log(`  "${suffix}": ${groups[suffix].length} files`);
+        });
+
+        return groups;
+    }
+
+    extractSuffix(filename) {
+        console.log(`      🔍 Extracting suffix from: "${filename}"`);
+
+        // Remove .csv extension first
+        const nameWithoutExt = filename.replace(/\.csv$/i, '');
+        console.log(`      📝 Name without extension: "${nameWithoutExt}"`);
+
+        // Look for common suffix patterns - match only the last _word pattern
+        // This will match _chem, _indiv, _raw, _std, _24hr, etc. at the end
+        const suffixMatch = nameWithoutExt.match(/_([a-zA-Z0-9]+)$/);
+        console.log(`      🎯 Regex match result:`, suffixMatch);
+
+        if (suffixMatch) {
+            const suffix = '_' + suffixMatch[1];
+            console.log(`      ✅ Extracted suffix: "${suffix}"`);
+            return suffix;
+        }
+
+        console.log(`      ❌ No suffix pattern found`);
+        return null;
+    }
+
+    selectMatchingSuffixFiles(fileGroups) {
+        console.log('🎯 SELECTING LARGEST MATCHING GROUP:');
+
+        // Find the group with the most files (most common suffix)
+        let largestGroup = [];
+        let largestGroupSuffix = '';
+
+        Object.keys(fileGroups).forEach(suffix => {
+            const groupSize = fileGroups[suffix].length;
+            console.log(`  Evaluating suffix "${suffix}": ${groupSize} files`);
+
+            if (groupSize > largestGroup.length) {
+                console.log(`    🆕 New largest group! "${suffix}" with ${groupSize} files (previous: ${largestGroup.length})`);
+                largestGroup = fileGroups[suffix];
+                largestGroupSuffix = suffix;
+            } else {
+                console.log(`    ⏭️ Keeping existing largest group: "${largestGroupSuffix}" with ${largestGroup.length} files`);
+            }
+        });
+
+        console.log(`🏆 Selected largest group: "${largestGroupSuffix}" with ${largestGroup.length} files`);
+        largestGroup.forEach((file, index) => {
+            console.log(`  ${index + 1}. ${file.name}`);
+        });
+
+        return largestGroup;
     }
 
     updateSelectedFilesList() {
@@ -9128,19 +9686,120 @@ class MergePageManager {
             const content = await this.readFileContent(file);
             const parsedData = this.parseCSV(content);
 
-            // Extract date from first row, first column
-            const dateValue = parsedData.rows.length > 0 ?
-                new Date(parsedData.rows[0][0]).getTime() : 0;
+            // Intelligent date extraction based on file type and structure
+            const dateInfo = this.extractDateFromFile(parsedData, file.name);
 
             loadedFiles.push({
                 name: file.name,
                 headers: parsedData.headers,
                 rows: parsedData.rows,
-                dateValue: dateValue
+                dateValue: dateInfo.dateValue,
+                dateSource: dateInfo.source,
+                dateColumn: dateInfo.column
             });
         }
 
         return loadedFiles;
+    }
+
+    extractDateFromFile(parsedData, filename) {
+        const { headers, rows } = parsedData;
+
+        // Method 1: Look for "Date" column in headers (most reliable)
+        const dateColumnIndex = headers.findIndex(header =>
+            header.toLowerCase().includes('date') ||
+            header.toLowerCase().includes('time') ||
+            header.toLowerCase() === 'd'
+        );
+
+        if (dateColumnIndex !== -1 && rows.length > 0) {
+            // Extract date from the Date column in the first data row
+            const dateStr = rows[0][dateColumnIndex];
+            const dateValue = new Date(dateStr).getTime();
+
+            if (!isNaN(dateValue)) {
+                return {
+                    dateValue: dateValue,
+                    source: `Date column (${headers[dateColumnIndex]})`,
+                    column: dateColumnIndex
+                };
+            }
+        }
+
+        // Method 2: Look for date in first column (traditional approach)
+        if (rows.length > 0) {
+            const firstCellDate = new Date(rows[0][0]).getTime();
+            if (!isNaN(firstCellDate)) {
+                return {
+                    dateValue: firstCellDate,
+                    source: 'First column, first row',
+                    column: 0
+                };
+            }
+        }
+
+        // Method 3: Extract date from filename pattern (fallback)
+        const filenameDate = this.extractDateFromFilename(filename);
+        if (filenameDate) {
+            return {
+                dateValue: filenameDate.getTime(),
+                source: 'Filename pattern',
+                column: -1
+            };
+        }
+
+        // Method 4: Search all cells in first few rows for date-like content
+        for (let rowIndex = 0; rowIndex < Math.min(3, rows.length); rowIndex++) {
+            for (let colIndex = 0; colIndex < Math.min(5, rows[rowIndex].length); colIndex++) {
+                const cellValue = rows[rowIndex][colIndex];
+                const potentialDate = new Date(cellValue).getTime();
+
+                if (!isNaN(potentialDate) && potentialDate > new Date('2020-01-01').getTime()) {
+                    return {
+                        dateValue: potentialDate,
+                        source: `Cell [${rowIndex + 1},${colIndex + 1}]`,
+                        column: colIndex
+                    };
+                }
+            }
+        }
+
+        // Fallback: use current time (will be sorted last)
+        console.warn(`No date found in file ${filename}, using current time as fallback`);
+        return {
+            dateValue: Date.now(),
+            source: 'Fallback (current time)',
+            column: -1
+        };
+    }
+
+    extractDateFromFilename(filename) {
+        // Look for common date patterns in filename
+        const datePatterns = [
+            /(\d{4})[-_]?(\d{2})[-_]?(\d{2})/,  // YYYY-MM-DD or YYYYMMDD
+            /(\d{2})[-_]?(\d{2})[-_]?(\d{4})/,  // DD-MM-YYYY or MM-DD-YYYY
+            /(\d{4})(\d{2})(\d{2})/             // YYYYMMDD compact
+        ];
+
+        for (const pattern of datePatterns) {
+            const match = filename.match(pattern);
+            if (match) {
+                // Try different interpretations
+                const dates = [
+                    new Date(match[1], match[2] - 1, match[3]), // YYYY-MM-DD
+                    new Date(match[3], match[2] - 1, match[1]), // DD-MM-YYYY
+                    new Date(match[3], match[1] - 1, match[2])  // MM-DD-YYYY
+                ];
+
+                for (const date of dates) {
+                    if (!isNaN(date.getTime()) && date.getFullYear() > 2020) {
+                        return date;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     readFileContent(file) {
@@ -9160,37 +9819,154 @@ class MergePageManager {
     }
 
     performMerge(loadedFiles) {
-        // Sort files by date value
+        // Sort files by date value (earliest first)
         const sortedFiles = loadedFiles.sort((a, b) => a.dateValue - b.dateValue);
 
-        // Use headers from first file
-        const masterHeaders = sortedFiles[0].headers;
+        console.log('📅 Merge order based on detected dates:');
+        sortedFiles.forEach((file, index) => {
+            const dateStr = new Date(file.dateValue).toLocaleDateString('en-GB');
+            console.log(`  ${index + 1}. ${file.name} - ${dateStr} (${file.dateSource})`);
+        });
 
-        // Combine all rows
+        // Validate headers and get master file (with most columns)
+        const headerValidation = this.validateHeaders(sortedFiles);
+        if (!headerValidation.isValid) {
+            throw new Error(`Header mismatch detected: ${headerValidation.error}`);
+        }
+
+        const masterHeaders = headerValidation.masterHeaders;
+        const masterFile = headerValidation.masterFile;
+
+        console.log(`🎯 Using master headers from ${masterFile.name} (${masterHeaders.length} columns)`);
+
+        // Combine all rows chronologically with smart padding
         const mergedRows = [];
-        sortedFiles.forEach(file => {
-            mergedRows.push(...file.rows);
+        sortedFiles.forEach((file, fileIndex) => {
+            // Add a separator comment for debugging (will be visible in preview)
+            if (fileIndex > 0) {
+                // Add empty row to separate file boundaries
+                mergedRows.push(new Array(masterHeaders.length).fill(''));
+            }
+
+            // Process each row from this file
+            file.rows.forEach(row => {
+                // Pad row to match master header length
+                const paddedRow = [...row];
+
+                // Add empty strings for missing columns
+                while (paddedRow.length < masterHeaders.length) {
+                    paddedRow.push('');
+                }
+
+                mergedRows.push(paddedRow);
+            });
+
+            console.log(`📋 Processed ${file.name}: ${file.rows.length} rows, padded from ${file.headers.length} to ${masterHeaders.length} columns`);
         });
 
         this.mergedData = {
             headers: masterHeaders,
             rows: mergedRows,
             sourceFiles: sortedFiles.map(f => f.name),
-            suggestedName: this.generateMergedFileName(sortedFiles)
+            sortedFilesInfo: sortedFiles.map(f => ({
+                name: f.name,
+                date: new Date(f.dateValue).toLocaleDateString('en-GB'),
+                dateSource: f.dateSource,
+                rowCount: f.rows.length,
+                originalColumns: f.headers.length,
+                paddedColumns: masterHeaders.length
+            })),
+            suggestedName: this.generateMergedFileName(sortedFiles),
+            mergeOrder: sortedFiles.map((f, i) => `${i + 1}. ${f.name} (${new Date(f.dateValue).toLocaleDateString('en-GB')})`)
         };
+
+        console.log(`✅ Merge complete: ${mergedRows.length} total rows with ${masterHeaders.length} columns`);
 
         return this.mergedData;
     }
 
-    generateMergedFileName(sortedFiles) {
-        const baseName = sortedFiles[0].name.replace('_indiv.csv', '');
-        const firstDate = sortedFiles[0].name.match(/\d{4}/)?.[0] || '';
-        const lastDate = sortedFiles[sortedFiles.length - 1].name.match(/\d{4}/)?.[0] || '';
+    validateHeaders(sortedFiles) {
+        // Sort files by column count to find the one with most columns
+        const filesByColumnCount = [...sortedFiles].sort((a, b) => b.headers.length - a.headers.length);
+        const masterFile = filesByColumnCount[0];
+        const masterHeaders = masterFile.headers;
 
-        if (firstDate && lastDate && firstDate !== lastDate) {
-            return `${baseName}_${firstDate}-${lastDate}_merged.csv`;
+        console.log('📊 SMART MERGE - Column Analysis:');
+        sortedFiles.forEach(file => {
+            console.log(`  ${file.name}: ${file.headers.length} columns`);
+        });
+        console.log(`🏆 Master file (most columns): ${masterFile.name} with ${masterHeaders.length} columns`);
+
+        // Validate that all files are compatible with master
+        for (const file of sortedFiles) {
+            const currentHeaders = file.headers;
+
+            // Skip if it's the master file itself
+            if (file === masterFile) continue;
+
+            // Check if current file's headers match the first N columns of master
+            if (currentHeaders.length > masterHeaders.length) {
+                return {
+                    isValid: false,
+                    error: `Logic error: ${file.name} has more columns than master. This shouldn't happen.`
+                };
+            }
+
+            // Validate that first N headers match exactly (in order)
+            for (let j = 0; j < currentHeaders.length; j++) {
+                const master = masterHeaders[j].toLowerCase().trim();
+                const current = currentHeaders[j].toLowerCase().trim();
+
+                if (master !== current) {
+                    return {
+                        isValid: false,
+                        error: `Column ${j + 1} header mismatch: "${masterHeaders[j]}" vs "${currentHeaders[j]}" in ${file.name}`
+                    };
+                }
+            }
+
+            console.log(`✅ ${file.name}: First ${currentHeaders.length} columns match master`);
+        }
+
+        return {
+            isValid: true,
+            masterFile: masterFile,
+            masterHeaders: masterHeaders
+        };
+    }
+
+    generateMergedFileName(sortedFiles) {
+        // Extract the common base name and suffix from the first file
+        const firstName = sortedFiles[0].name;
+        const suffix = this.extractSuffix(firstName);
+
+        // Remove suffix and .csv to get base name
+        let baseName = firstName;
+        if (suffix) {
+            baseName = firstName.replace(suffix + '.csv', '');
         } else {
-            return `${baseName}_merged.csv`;
+            baseName = firstName.replace('.csv', '');
+        }
+
+        // Extract date range from the chronologically sorted files
+        const firstDate = new Date(sortedFiles[0].dateValue);
+        const lastDate = new Date(sortedFiles[sortedFiles.length - 1].dateValue);
+
+        // Format dates as YYYY-MM-DD
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0];
+        };
+
+        const firstDateStr = formatDate(firstDate);
+        const lastDateStr = formatDate(lastDate);
+
+        // Generate filename based on date range and original suffix
+        const suffixPart = suffix ? suffix.replace('_', '') : 'data';
+
+        if (firstDateStr !== lastDateStr) {
+            return `${baseName}_${firstDateStr}_to_${lastDateStr}_merged_${suffixPart}.csv`;
+        } else {
+            return `${baseName}_${firstDateStr}_merged_${suffixPart}.csv`;
         }
     }
 
@@ -9291,7 +10067,14 @@ class MergePageManager {
         if (!container || !messageEl) return;
 
         container.classList.remove('hidden');
-        messageEl.textContent = message;
+
+        // Handle multi-line messages by converting \n to <br>
+        if (message.includes('\n')) {
+            messageEl.innerHTML = message.replace(/\n/g, '<br>');
+        } else {
+            messageEl.textContent = message;
+        }
+
         messageEl.className = `status-message ${type}`;
     }
 

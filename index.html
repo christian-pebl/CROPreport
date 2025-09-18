@@ -348,7 +348,7 @@
                     <button id="backToMainBtn" class="back-btn" title="Back to Main">← Back</button>
                     <div class="page-title-section">
                         <h1>🔄 File Merge</h1>
-                        <p>Merge individual (_indiv) CSV files chronologically</p>
+                        <p>Merge CSV files with matching suffixes chronologically</p>
                     </div>
                 </div>
             </header>
@@ -357,15 +357,15 @@
                 <div class="merge-section-container">
                     <div class="section-header">
                         <h2>Select Files to Merge</h2>
-                        <p class="section-description">Choose two or more _indiv files to merge them chronologically based on their dates.</p>
+                        <p class="section-description">Choose two or more CSV files with matching suffixes (e.g., _indiv, _raw, _chem) to merge them chronologically based on their dates.</p>
                     </div>
 
                     <!-- File Selection Area -->
                     <div class="merge-file-selection">
                         <div class="file-input-container">
-                            <button id="selectMergeFilesBtn" class="btn-primary">📄 Select _indiv Files</button>
+                            <button id="selectMergeFilesBtn" class="btn-primary">📄 Select CSV Files</button>
                             <input type="file" id="mergeFilesInput" accept=".csv" multiple hidden>
-                            <span class="file-input-help">Select multiple CSV files that contain "_indiv" in their filename (case-insensitive)</span>
+                            <span class="file-input-help">Select multiple CSV files with matching suffixes (e.g., _indiv, _raw, _chem). Files will be automatically grouped by suffix type.</span>
                         </div>
 
                         <!-- Selected Files List -->
