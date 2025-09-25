@@ -51,6 +51,9 @@
                     <button id="chemPlotPageBtn" class="nav-btn" data-page="chemPlot" title="Chemical Plot Data">
                         🧪 Chem-Plot
                     </button>
+                    <button id="wqPlotPageBtn" class="nav-btn" data-page="wqPlot" title="Water Quality Plot Data">
+                        💧 WQ-Plot
+                    </button>
                     <button id="mergePageBtn" class="nav-btn" title="Merge Files">
                         🔄 Merge
                     </button>
@@ -340,6 +343,84 @@
                 </div>
             </main>
         </div> <!-- End chemPlotPage -->
+
+        <!-- WQ-Plot Page -->
+        <div id="wqPlotPage" class="page-content hidden">
+            <main>
+                <!-- Water Quality Data Visualization Section -->
+                <div class="plot-section-container">
+                    <div class="section-header">
+                        <h2>Water Quality Data Visualization</h2>
+                        <p class="section-description">Visualize and analyze water quality parameters from _wq.csv files</p>
+                    </div>
+
+                    <!-- WQ Data Source Selection -->
+                    <div class="form-section">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="wqDataSourceSelect">Data Source (_wq.csv files):</label>
+                                <select id="wqDataSourceSelect" class="form-control">
+                                    <option value="">Select _wq.csv file...</option>
+                                </select>
+                                <small class="help-text">Choose a water quality file for visualization</small>
+                            </div>
+                        </div>
+
+                        <!-- Parameter Selection (will be populated dynamically) -->
+                        <div id="wqParameterSelectionGroup" class="form-row" style="display: none;">
+                            <div class="form-group">
+                                <label>Select Parameter:</label>
+                                <div id="wqParameterRadios" class="radio-group">
+                                    <!-- Radio buttons will be dynamically added here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Plot Type Toggle -->
+                        <div id="wqPlotTypeGroup" class="form-row" style="display: none;">
+                            <div class="form-group">
+                                <label>Plot Type:</label>
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" name="wqPlotType" value="whisker" checked>
+                                        <span>Whisker Plot</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" name="wqPlotType" value="errorbar">
+                                        <span>Mean ± SD</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Summary (Collapsible) -->
+                        <div id="wqDataSummary" class="data-summary" style="display: none;">
+                            <details>
+                                <summary style="cursor: pointer; font-weight: bold; color: #374151; margin-bottom: 10px;">
+                                    📊 Data Summary (click to expand)
+                                </summary>
+                                <div id="wqSummaryContent" style="margin-top: 10px; padding-left: 15px;"></div>
+                            </details>
+                        </div>
+
+                        <!-- Generate Plot Button -->
+                        <div class="form-row">
+                            <button id="generateWqPlotBtn" class="btn-primary" disabled>
+                                📊 Generate Plot
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- WQ Plot Canvas -->
+                    <div id="wqPlotSection" class="plot-container" style="display: none;">
+                        <canvas id="wqPlotCanvas"></canvas>
+                        <div class="plot-controls">
+                            <button id="saveWqPlotBtn" class="btn-secondary">💾 Save Plot</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div> <!-- End wqPlotPage -->
 
         <!-- Merge Page -->
         <div id="mergePage" class="page-content hidden">

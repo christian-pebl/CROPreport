@@ -753,7 +753,7 @@ class CSVManager {
     handleFileUpload(file) {
         console.log('=== HANDLE FILE UPLOAD ===');
         console.log('File received:', file);
-        
+
         if (!file) {
             console.error('No file provided');
             return;
@@ -780,10 +780,39 @@ class CSVManager {
             const csvContent = e.target.result;
             console.log('File read successfully, content length:', csvContent.length);
             console.log('Content preview:', csvContent.substring(0, 200));
-            
+
             this.parseCSV(csvContent);
             console.log('After parsing - Headers:', this.headers.length, 'Data rows:', this.csvData.length);
-            
+
+            // Add the file to workingDirFiles with parsed data for WQ and other plot pages
+            const existingFile = this.workingDirFiles.find(f => f.name === file.name);
+            console.log('=== ADDING FILE TO WORKING DIR ===');
+            console.log('File already exists in workingDirFiles:', !!existingFile);
+
+            if (!existingFile) {
+                // Create an enhanced file object with parsed data
+                const enhancedFile = Object.create(file);
+                enhancedFile.data = this.convertToObjectFormat(this.headers, this.csvData);
+                console.log('Created enhanced file with data:');
+                console.log('  - Name:', enhancedFile.name);
+                console.log('  - Data length:', enhancedFile.data.length);
+                console.log('  - First data row:', enhancedFile.data[0]);
+                console.log('  - File type detection: _wq?', enhancedFile.name.toLowerCase().includes('_wq'));
+
+                this.workingDirFiles.push(enhancedFile);
+                console.log(`Added ${file.name} to workingDirFiles`);
+                console.log('Total files in workingDirFiles:', this.workingDirFiles.length);
+
+                // Update WQ and Chem plot data sources if navigation manager exists
+                if (typeof navigationManager !== 'undefined' && navigationManager) {
+                    console.log('Updating navigation manager data sources...');
+                    navigationManager.updateWqPlotDataSources();
+                    navigationManager.updateChemPlotDataSources();
+                }
+            } else {
+                console.log('File already in workingDirFiles, skipping');
+            }
+
             this.displayFileInfo(file);
             this.renderTable();
         };
@@ -794,6 +823,17 @@ class CSVManager {
         };
 
         reader.readAsText(file);
+    }
+
+    // Convert array format to object format for compatibility with plot pages
+    convertToObjectFormat(headers, dataRows) {
+        return dataRows.map(row => {
+            const obj = {};
+            headers.forEach((header, index) => {
+                obj[header] = row[index];
+            });
+            return obj;
+        });
     }
 
     async readFileAsText(file) {
@@ -8709,6 +8749,988 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         }
     }
 
+    // WQ Plot Methods
+    initializeWqPlotPage() {
+        const wqDataSourceSelect = document.getElementById('wqDataSourceSelect');
+        const generateWqPlotBtn = document.getElementById('generateWqPlotBtn');
+        const saveWqPlotBtn = document.getElementById('saveWqPlotBtn');
+
+        if (wqDataSourceSelect) {
+            wqDataSourceSelect.addEventListener('change', () => {
+                this.handleWqFileSelection();
+            });
+        }
+
+        if (generateWqPlotBtn) {
+            generateWqPlotBtn.addEventListener('click', () => {
+                this.generateWqPlot();
+            });
+        }
+
+        if (saveWqPlotBtn) {
+            saveWqPlotBtn.addEventListener('click', () => {
+                this.saveWqPlot();
+            });
+        }
+
+        // Populate the data source dropdown with existing loaded files
+        this.updateWqPlotDataSources();
+    }
+
+    updateWqPlotDataSources() {
+        console.log('=== UPDATE WQ PLOT DATA SOURCES ===');
+        const wqDataSourceSelect = document.getElementById('wqDataSourceSelect');
+        console.log('WQ select element found:', !!wqDataSourceSelect);
+        console.log('csvManager exists:', !!csvManager);
+        console.log('csvManager.workingDirFiles exists:', !!(csvManager && csvManager.workingDirFiles));
+
+        if (wqDataSourceSelect && csvManager && csvManager.workingDirFiles) {
+            console.log('Total files in workingDirFiles:', csvManager.workingDirFiles.length);
+            console.log('All files:', csvManager.workingDirFiles.map(f => ({
+                name: f.name,
+                hasData: !!f.data,
+                isWQ: f.name.toLowerCase().includes('_wq')
+            })));
+
+            wqDataSourceSelect.innerHTML = '<option value="">Select _wq.csv file...</option>';
+            const wqFiles = csvManager.workingDirFiles.filter(file =>
+                file.name.toLowerCase().includes('_wq') && file.name.toLowerCase().endsWith('.csv')
+            );
+            console.log('Filtered WQ files:', wqFiles.map(f => f.name));
+
+            wqFiles.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                wqDataSourceSelect.appendChild(option);
+                console.log('Added option for:', file.name);
+            });
+
+            console.log('Final dropdown options count:', wqDataSourceSelect.options.length - 1); // -1 for placeholder
+        } else {
+            console.log('Could not update WQ data sources - missing requirements');
+        }
+    }
+
+    handleWqFileSelection() {
+        console.log('=== WQ FILE SELECTION ===');
+        const wqDataSourceSelect = document.getElementById('wqDataSourceSelect');
+        const selectedFile = wqDataSourceSelect.value;
+        console.log('Selected WQ file:', selectedFile);
+
+        if (!selectedFile) {
+            console.log('No file selected, hiding UI elements');
+            document.getElementById('wqParameterSelectionGroup').style.display = 'none';
+            document.getElementById('wqPlotTypeGroup').style.display = 'none';
+            document.getElementById('wqDataSummary').style.display = 'none';
+            document.getElementById('generateWqPlotBtn').disabled = true;
+            return;
+        }
+
+        // Load and parse the WQ file
+        console.log('Looking for file in workingDirFiles...');
+        console.log('Available files:', csvManager.workingDirFiles.map(f => ({
+            name: f.name,
+            hasData: !!f.data,
+            dataLength: f.data ? f.data.length : 0,
+            type: typeof f.data,
+            fileType: f.constructor.name
+        })));
+
+        const fileData = csvManager.workingDirFiles.find(f => f.name === selectedFile);
+        console.log('Found file:', fileData ? fileData.name : 'NOT FOUND');
+        console.log('File object:', fileData);
+        console.log('File has data property:', fileData ? 'data' in fileData : false);
+        console.log('File.data is:', fileData ? fileData.data : 'N/A');
+        console.log('File.data type:', fileData && fileData.data ? typeof fileData.data : 'N/A');
+
+        if (fileData && fileData.data) {
+            console.log('File data length:', fileData.data.length);
+            console.log('First data row:', fileData.data[0]);
+            this.processWqData(fileData.data);
+        } else {
+            console.error('File not found or has no data');
+            console.error('Attempting to read and parse file directly...');
+
+            // Try to read the file directly if data is missing
+            if (fileData) {
+                this.readAndProcessWqFile(fileData);
+            }
+        }
+    }
+
+    async readAndProcessWqFile(file) {
+        console.log('=== READ AND PROCESS WQ FILE ===');
+        console.log('Reading file:', file.name);
+
+        try {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const csvContent = e.target.result;
+                console.log('File content read, length:', csvContent.length);
+
+                // Parse CSV content
+                const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line);
+                if (lines.length === 0) {
+                    console.error('Empty file');
+                    return;
+                }
+
+                // Parse headers
+                const headers = lines[0].split(',').map(h => h.trim());
+                console.log('Headers:', headers);
+
+                // Parse data rows into object format
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    if (values.length > 0 && values.some(v => v)) { // Skip empty rows
+                        const row = {};
+                        headers.forEach((header, index) => {
+                            row[header] = values[index] || '';
+                        });
+                        data.push(row);
+                    }
+                }
+
+                console.log('Parsed data rows:', data.length);
+                console.log('First data row:', data[0]);
+
+                // Store the parsed data on the file object for future use
+                file.data = data;
+
+                // Process the data
+                this.processWqData(data);
+            };
+
+            reader.onerror = (e) => {
+                console.error('Error reading file:', e);
+            };
+
+            reader.readAsText(file);
+        } catch (error) {
+            console.error('Error in readAndProcessWqFile:', error);
+        }
+    }
+
+    processWqData(csvData) {
+        console.log('=== PROCESS WQ DATA ===');
+        console.log('Input data length:', csvData.length);
+        console.log('First row keys:', csvData[0] ? Object.keys(csvData[0]) : 'No data');
+        console.log('Sample row:', csvData[0]);
+
+        // Filter out empty rows
+        const validData = csvData.filter(row =>
+            row['Date'] && row['station ID'] && row['Date'].trim() !== ''
+        );
+        console.log('Valid data after filtering:', validData.length);
+
+        if (validData.length === 0) {
+            console.error('No valid data found in WQ file');
+            console.error('Check if Date and station ID columns exist');
+            return;
+        }
+
+        // Dynamically detect parameters (columns after the fixed columns)
+        const fixedColumns = ['Date', 'station ID', 'subset', 'replicate'];
+        const parameters = Object.keys(validData[0]).filter(col =>
+            !fixedColumns.includes(col) && col.trim() !== ''
+        );
+
+        console.log('Detected parameters:', parameters);
+
+        // Group data by station + date
+        const groups = {};
+        validData.forEach(row => {
+            const key = `${row['station ID']}_${row['Date']}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    station: row['station ID'],
+                    date: row['Date'],
+                    replicates: {}
+                };
+                // Initialize arrays for each parameter
+                parameters.forEach(param => {
+                    groups[key].replicates[param] = [];
+                });
+            }
+
+            // Add values for each parameter
+            parameters.forEach(param => {
+                const value = parseFloat(row[param]);
+                if (!isNaN(value)) {
+                    groups[key].replicates[param].push(value);
+                }
+            });
+        });
+
+        // Store processed data
+        this.wqData = {
+            groups: groups,
+            parameters: parameters,
+            groupKeys: Object.keys(groups).sort()
+        };
+
+        console.log('Processed WQ data:', {
+            numGroups: this.wqData.groupKeys.length,
+            parameters: parameters,
+            exampleGroup: groups[this.wqData.groupKeys[0]]
+        });
+
+        // Update UI with detected parameters
+        this.populateWqParameterRadios(parameters);
+        this.updateWqDataSummary();
+
+        document.getElementById('wqParameterSelectionGroup').style.display = 'block';
+        document.getElementById('wqPlotTypeGroup').style.display = 'block';
+        document.getElementById('wqDataSummary').style.display = 'block';
+    }
+
+    populateWqParameterRadios(parameters) {
+        const radioContainer = document.getElementById('wqParameterRadios');
+        radioContainer.innerHTML = '';
+
+        parameters.forEach((param, index) => {
+            const radioWrapper = document.createElement('div');
+            radioWrapper.className = 'radio-item';
+
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'wqParameter';
+            radio.id = `wqParam_${param}`;
+            radio.value = param;
+            if (index === 0) radio.checked = true;
+
+            radio.addEventListener('change', () => {
+                document.getElementById('generateWqPlotBtn').disabled = false;
+            });
+
+            const label = document.createElement('label');
+            label.htmlFor = `wqParam_${param}`;
+            label.textContent = param;
+
+            radioWrapper.appendChild(radio);
+            radioWrapper.appendChild(label);
+            radioContainer.appendChild(radioWrapper);
+        });
+    }
+
+    updateWqDataSummary() {
+        const summaryContent = document.getElementById('wqSummaryContent');
+        if (!this.wqData) return;
+
+        const { groups, groupKeys, parameters } = this.wqData;
+
+        // Get unique stations and dates
+        const stations = [...new Set(groupKeys.map(key => groups[key].station))];
+        const dates = [...new Set(groupKeys.map(key => groups[key].date))];
+
+        // Calculate replicate counts
+        const replicateCounts = {};
+        groupKeys.forEach(key => {
+            const group = groups[key];
+            const count = group.replicates[parameters[0]].length;
+            const label = `${group.station} (${this.formatDateShort(group.date)})`;
+            replicateCounts[label] = count;
+        });
+
+        summaryContent.innerHTML = `
+            <div class="summary-grid">
+                <div><strong>Stations:</strong> ${stations.join(', ')}</div>
+                <div><strong>Sampling Dates:</strong> ${dates.map(d => this.formatDateShort(d)).join(', ')}</div>
+                <div><strong>Parameters:</strong> ${parameters.join(', ')}</div>
+                <div><strong>Replicates per group:</strong></div>
+                <ul style="margin: 5px 0 0 20px;">
+                    ${Object.entries(replicateCounts).map(([label, count]) =>
+                        `<li>${label}: ${count} replicates</li>`
+                    ).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    formatDateShort(dateStr) {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear().toString().slice(-2);
+        return `${day}/${month}/${year}`;
+    }
+
+    calculateWhiskerStats(values) {
+        if (!values || values.length === 0) return null;
+
+        const sorted = [...values].sort((a, b) => a - b);
+        const n = sorted.length;
+
+        // For very small samples, use simpler statistics
+        if (n < 4) {
+            return {
+                min: sorted[0],
+                q1: sorted[0],
+                median: n === 1 ? sorted[0] : (sorted[Math.floor(n/2)] + sorted[Math.ceil(n/2) - 1]) / 2,
+                q3: sorted[n - 1],
+                max: sorted[n - 1],
+                outliers: [],
+                n: n
+            };
+        }
+
+        // Calculate quartiles
+        const q1 = this.percentile(sorted, 25);
+        const median = this.percentile(sorted, 50);
+        const q3 = this.percentile(sorted, 75);
+        const iqr = q3 - q1;
+
+        // Identify outliers using 1.5 * IQR rule
+        const lowerBound = q1 - 1.5 * iqr;
+        const upperBound = q3 + 1.5 * iqr;
+
+        const outliers = values.filter(v => v < lowerBound || v > upperBound);
+        const filtered = values.filter(v => v >= lowerBound && v <= upperBound);
+
+        return {
+            min: Math.min(...filtered),
+            q1: q1,
+            median: median,
+            q3: q3,
+            max: Math.max(...filtered),
+            outliers: outliers,
+            mean: values.reduce((a, b) => a + b, 0) / n,
+            n: n
+        };
+    }
+
+    percentile(sortedArray, percentile) {
+        const index = (percentile / 100) * (sortedArray.length - 1);
+        const lower = Math.floor(index);
+        const upper = Math.ceil(index);
+        const weight = index % 1;
+
+        if (lower === upper) {
+            return sortedArray[lower];
+        }
+
+        return sortedArray[lower] * (1 - weight) + sortedArray[upper] * weight;
+    }
+
+    calculateErrorBarStats(values) {
+        if (!values || values.length === 0) return null;
+
+        const n = values.length;
+
+        // Calculate mean
+        const mean = values.reduce((sum, v) => sum + v, 0) / n;
+
+        // Calculate standard deviation
+        const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
+        const variance = squaredDiffs.reduce((sum, v) => sum + v, 0) / n;
+        const sd = Math.sqrt(variance);
+
+        // Also get min and max for Y-axis scaling
+        const sorted = [...values].sort((a, b) => a - b);
+
+        return {
+            mean: mean,
+            sd: sd,
+            min: sorted[0],
+            max: sorted[n - 1],
+            n: n,
+            // For error bars, we want mean ± SD
+            errorLower: mean - sd,
+            errorUpper: mean + sd
+        };
+    }
+
+    generateWqPlot() {
+        console.log('Generating WQ plot...');
+
+        if (!this.wqData) {
+            console.error('No WQ data to plot');
+            return;
+        }
+
+        // Get selected parameter and plot type
+        const selectedParam = document.querySelector('input[name="wqParameter"]:checked')?.value;
+        const plotType = document.querySelector('input[name="wqPlotType"]:checked')?.value || 'whisker';
+
+        if (!selectedParam) {
+            alert('Please select a parameter to plot');
+            return;
+        }
+
+        console.log('Selected parameter:', selectedParam);
+        console.log('Plot type:', plotType);
+
+        // Calculate statistics for each group based on plot type
+        const plotData = [];
+        this.wqData.groupKeys.forEach(key => {
+            const group = this.wqData.groups[key];
+            const values = group.replicates[selectedParam];
+
+            if (plotType === 'whisker') {
+                const stats = this.calculateWhiskerStats(values);
+                if (stats) {
+                    plotData.push({
+                        label: `${group.station} (${this.formatDateShort(group.date)})`,
+                        station: group.station,
+                        dateLabel: this.formatDateShort(group.date),
+                        stats: stats,
+                        date: group.date,
+                        type: 'whisker'
+                    });
+                }
+            } else if (plotType === 'errorbar') {
+                const stats = this.calculateErrorBarStats(values);
+                if (stats) {
+                    plotData.push({
+                        label: `${group.station} (${this.formatDateShort(group.date)})`,
+                        station: group.station,
+                        dateLabel: this.formatDateShort(group.date),
+                        stats: stats,
+                        date: group.date,
+                        type: 'errorbar'
+                    });
+                }
+            }
+        });
+
+        console.log('Plot data prepared (unsorted):', plotData);
+
+        // Sort plot data by date (earliest first), then by station name alphabetically
+        plotData.sort((a, b) => {
+            // First sort by date
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+
+            if (dateA < dateB) return -1;
+            if (dateA > dateB) return 1;
+
+            // If dates are equal, sort alphabetically by station name
+            return a.station.localeCompare(b.station);
+        });
+
+        console.log('Plot data sorted by date then station:', plotData);
+
+        // Store plot data for rendering
+        this.wqPlotData = {
+            parameter: selectedParam,
+            data: plotData,
+            plotType: plotType
+        };
+
+        // Render the appropriate plot type
+        if (plotType === 'whisker') {
+            this.renderWqWhiskerPlot();
+        } else {
+            this.renderWqErrorBarPlot();
+        }
+    }
+
+    // Intelligent Y-axis calculation with adaptive scaling
+    calculateIntelligentYAxis(data, parameter) {
+        // Extract all values including outliers
+        let allValues = [];
+        data.forEach(d => {
+            const stats = d.stats;
+            allValues.push(stats.min, stats.max);
+            if (stats.outliers && stats.outliers.length > 0) {
+                // Cap extreme outliers (>3x IQR from Q3 or Q1)
+                const iqr = stats.q3 - stats.q1;
+                const upperLimit = stats.q3 + 3 * iqr;
+                const lowerLimit = stats.q1 - 3 * iqr;
+                stats.outliers.forEach(outlier => {
+                    if (outlier <= upperLimit && outlier >= lowerLimit) {
+                        allValues.push(outlier);
+                    }
+                });
+            }
+        });
+
+        const minValue = Math.min(...allValues);
+        const maxValue = Math.max(...allValues);
+        const range = maxValue - minValue;
+        const mean = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+
+        // Parameter-specific rules (updated to include new parameter names)
+        const paramRules = {
+            'pH': { forceNonZero: true },
+            'Sal (ppt)': { forceNonZero: true },
+            'PO4 (mg/L)': { preferZero: true },
+            'NO3 (mg/L)': { preferZero: true },
+            'P (mg/L)': { preferZero: true },
+            'N (mg/L)': { preferZero: true }
+        };
+
+        const rule = paramRules[parameter] || {};
+
+        // Detect data characteristics
+        const coefficientOfVariation = (range / mean);
+        const isSmallVariation = coefficientOfVariation < 0.1; // Less than 10% variation
+        const isFarFromZero = minValue > (maxValue * 0.3);
+
+        let yMin, yMax, stepSize;
+
+        // Determine Y-axis bounds
+        if (rule.forceNonZero || (isSmallVariation && isFarFromZero)) {
+            // Non-zero start with tight range for small variations
+            const buffer = isSmallVariation ? range * 0.5 : range * 0.1;
+            yMin = minValue - buffer;
+            yMax = maxValue + buffer;
+        } else if (rule.preferZero || minValue < (maxValue * 0.2)) {
+            // Start at zero for nutrients or values close to zero
+            yMin = 0;
+            yMax = maxValue * 1.1; // 10% buffer above max
+        } else {
+            // Adaptive with 10% buffers on both sides
+            const buffer = range * 0.1;
+            yMin = Math.max(0, minValue - buffer);
+            yMax = maxValue + buffer;
+        }
+
+        // Calculate nice step size using a more robust algorithm
+        const targetTicks = 5; // Target 5-7 ticks
+        const roughStep = (yMax - yMin) / targetTicks;
+
+        // Get the order of magnitude
+        const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+        const normalized = roughStep / magnitude;
+
+        // Choose nice normalized step
+        let niceStep;
+        if (normalized <= 1) niceStep = 1;
+        else if (normalized <= 2) niceStep = 2;
+        else if (normalized <= 2.5) niceStep = 2.5;
+        else if (normalized <= 5) niceStep = 5;
+        else niceStep = 10;
+
+        stepSize = niceStep * magnitude;
+
+        // For very small ranges, ensure we have enough precision
+        if (range < 0.01) {
+            stepSize = 0.001;
+        } else if (range < 0.1) {
+            stepSize = Math.min(stepSize, 0.01);
+        }
+
+        // Adjust bounds to nice numbers
+        yMin = Math.floor(yMin / stepSize) * stepSize;
+        yMax = Math.ceil(yMax / stepSize) * stepSize;
+
+        // Ensure we don't have too many or too few ticks
+        let numTicks = Math.round((yMax - yMin) / stepSize) + 1;
+
+        // If we have too many ticks, increase step size
+        if (numTicks > 10) {
+            stepSize = stepSize * 2;
+            yMin = Math.floor(minValue / stepSize) * stepSize - stepSize;
+            yMax = Math.ceil(maxValue / stepSize) * stepSize + stepSize;
+            numTicks = Math.round((yMax - yMin) / stepSize) + 1;
+        }
+
+        // If we have too few ticks, decrease step size
+        if (numTicks < 4) {
+            stepSize = stepSize / 2;
+            yMin = Math.floor(minValue / stepSize) * stepSize - stepSize;
+            yMax = Math.ceil(maxValue / stepSize) * stepSize + stepSize;
+            numTicks = Math.round((yMax - yMin) / stepSize) + 1;
+        }
+
+        // Determine decimal places based on step size
+        let decimals = 0;
+        if (stepSize < 0.01) decimals = 3;
+        else if (stepSize < 0.1) decimals = 2;
+        else if (stepSize < 1) decimals = 1;
+        else if (stepSize % 1 !== 0) decimals = 1;
+
+        return {
+            yMin: yMin,
+            yMax: yMax,
+            stepSize: stepSize,
+            numTicks: numTicks,
+            decimals: decimals,
+            isNonZeroStart: yMin !== 0
+        };
+    }
+
+    renderWqWhiskerPlot() {
+        const canvas = document.getElementById('wqPlotCanvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!this.wqPlotData) return;
+
+        // Show plot section
+        document.getElementById('wqPlotSection').style.display = 'block';
+
+        const { parameter, data } = this.wqPlotData;
+
+        // Dynamic canvas sizing (matching Crop-Plot)
+        const stationCount = data.length;
+        const minCanvasWidth = 576;
+        const optimalWidthPerStation = 50;
+        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160);
+        canvas.width = dynamicWidth;
+        canvas.height = 360;
+
+        // Uniform padding (matching Crop-Plot)
+        const padding = 80;
+        const chartWidth = canvas.width - 2 * padding;
+        const chartHeight = canvas.height - 2 * padding;
+
+        // Clear canvas with white background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Define font styles (matching Crop-Plot)
+        const FONT_FAMILY = '"Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+        const TITLE_FONT = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+        // Use intelligent Y-axis calculation
+        const yAxisConfig = this.calculateIntelligentYAxis(data, parameter);
+        const yMin = yAxisConfig.yMin;
+        const yMax = yAxisConfig.yMax;
+
+        console.log(`Intelligent Y-axis for ${parameter}:`, {
+            min: yMin,
+            max: yMax,
+            step: yAxisConfig.stepSize,
+            nonZeroStart: yAxisConfig.isNonZeroStart
+        });
+
+        // Scale functions
+        const getX = (index) => padding + (index + 0.5) * (chartWidth / data.length);
+        const getY = (value) => padding + (1 - (value - yMin) / (yMax - yMin)) * chartHeight;
+
+        // Draw frame (light gray box around plot area)
+        ctx.strokeStyle = '#d1d5db';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(padding, padding, chartWidth, chartHeight);
+
+        // Draw title (matching Crop-Plot style)
+        ctx.fillStyle = '#555';
+        ctx.font = TITLE_FONT;
+        ctx.textAlign = 'left';
+        ctx.fillText(`Water Quality - ${parameter}`, padding, 50);
+
+        // Draw Y-axis gridlines and labels using smart intervals
+        ctx.fillStyle = '#6b7280';
+        ctx.font = `11px ${FONT_FAMILY}`;
+        ctx.textAlign = 'right';
+
+        // Create array of tick values to ensure no duplicates
+        const tickValues = [];
+        for (let i = 0; i < yAxisConfig.numTicks; i++) {
+            const value = yMin + (i * yAxisConfig.stepSize);
+            if (value <= yMax + yAxisConfig.stepSize * 0.01) {
+                tickValues.push(value);
+            }
+        }
+
+        // Draw ticks
+        tickValues.forEach(value => {
+            const y = getY(value);
+
+            // Draw gridline
+            ctx.strokeStyle = '#f3f4f6';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(padding + chartWidth, y);
+            ctx.stroke();
+
+            // Draw label using the calculated decimal places
+            ctx.fillStyle = '#6b7280';
+            const labelText = value.toFixed(yAxisConfig.decimals);
+            ctx.fillText(labelText, padding - 10, y + 4);
+        });
+
+        // Y-axis title
+        ctx.save();
+        ctx.translate(25, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#374151';
+        ctx.font = `12px ${FONT_FAMILY}`;
+        ctx.textAlign = 'center';
+        const yAxisTitle = `${parameter} Distribution`;
+        ctx.fillText(yAxisTitle, 0, 0);
+        ctx.restore();
+
+        // Draw whisker plots (matching Crop-Plot style)
+        const boxWidth = Math.min(40, chartWidth / data.length * 0.6);
+
+        data.forEach((d, i) => {
+            const x = getX(i);
+            const stats = d.stats;
+
+            const minY = getY(stats.min);
+            const q1Y = getY(stats.q1);
+            const medianY = getY(stats.median);
+            const q3Y = getY(stats.q3);
+            const maxY = getY(stats.max);
+
+            // Draw whisker lines (vertical)
+            ctx.strokeStyle = '#4b5563';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, minY);
+            ctx.lineTo(x, q1Y);
+            ctx.moveTo(x, q3Y);
+            ctx.lineTo(x, maxY);
+            ctx.stroke();
+
+            // Draw whisker caps
+            const capWidth = boxWidth / 4;
+            ctx.beginPath();
+            ctx.moveTo(x - capWidth, minY);
+            ctx.lineTo(x + capWidth, minY);
+            ctx.moveTo(x - capWidth, maxY);
+            ctx.lineTo(x + capWidth, maxY);
+            ctx.stroke();
+
+            // Draw box (Q1 to Q3)
+            ctx.fillStyle = '#e5e7eb';
+            ctx.strokeStyle = '#4b5563';
+            ctx.lineWidth = 1;
+            const boxHeight = q1Y - q3Y;
+            ctx.fillRect(x - boxWidth / 2, q3Y, boxWidth, boxHeight);
+            ctx.strokeRect(x - boxWidth / 2, q3Y, boxWidth, boxHeight);
+
+            // Draw median line (bright red)
+            ctx.strokeStyle = '#dc2626';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x - boxWidth / 2, medianY);
+            ctx.lineTo(x + boxWidth / 2, medianY);
+            ctx.stroke();
+
+            // Draw outliers
+            if (stats.outliers && stats.outliers.length > 0) {
+                ctx.fillStyle = '#dc2626';
+                stats.outliers.forEach(outlier => {
+                    ctx.beginPath();
+                    ctx.arc(x, getY(outlier), 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+        });
+
+        // Draw X-axis labels (station names and dates on separate lines, rotated 45 degrees)
+        ctx.fillStyle = '#374151';
+        data.forEach((d, index) => {
+            const x = getX(index);
+            ctx.save();
+            ctx.translate(x, padding + chartHeight + 10);
+            ctx.rotate(-Math.PI / 4);
+            ctx.textAlign = 'right';
+
+            // Station name
+            ctx.font = `11px ${FONT_FAMILY}`;
+            ctx.fillText(d.station, 0, 0);
+
+            // Date (smaller font, below station name)
+            ctx.font = `10px ${FONT_FAMILY}`;
+            ctx.fillText(`(${d.dateLabel})`, 0, 12);
+
+            ctx.restore();
+        });
+
+        // X-axis title
+        ctx.fillStyle = '#374151';
+        ctx.font = `12px ${FONT_FAMILY}`;
+        ctx.textAlign = 'center';
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 65);
+    }
+
+    renderWqErrorBarPlot() {
+        const canvas = document.getElementById('wqPlotCanvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!this.wqPlotData) return;
+
+        // Show plot section
+        document.getElementById('wqPlotSection').style.display = 'block';
+
+        const { parameter, data } = this.wqPlotData;
+
+        // Dynamic canvas sizing (matching Crop-Plot and Whisker Plot)
+        const stationCount = data.length;
+        const minCanvasWidth = 576;
+        const optimalWidthPerStation = 50;
+        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160);
+        canvas.width = dynamicWidth;
+        canvas.height = 360;
+
+        // Uniform padding (matching Crop-Plot)
+        const padding = 80;
+        const chartWidth = canvas.width - 2 * padding;
+        const chartHeight = canvas.height - 2 * padding;
+
+        // Clear canvas with white background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Define font styles (matching Crop-Plot)
+        const FONT_FAMILY = '"Segoe UI", "SF Pro Display", "Helvetica Neue", "DejaVu Sans", Arial, sans-serif';
+        const TITLE_FONT = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+        // Use intelligent Y-axis calculation (need to adapt for error bar data)
+        // Extract all values for Y-axis calculation
+        let allValues = [];
+        data.forEach(d => {
+            const stats = d.stats;
+            allValues.push(stats.mean, stats.errorLower, stats.errorUpper);
+        });
+
+        const minValue = Math.min(...allValues);
+        const maxValue = Math.max(...allValues);
+
+        // Reuse the intelligent Y-axis calculation logic
+        const yAxisConfig = this.calculateIntelligentYAxis(
+            data.map(d => ({
+                stats: {
+                    min: d.stats.errorLower,
+                    max: d.stats.errorUpper,
+                    q1: d.stats.mean - d.stats.sd/2,
+                    q3: d.stats.mean + d.stats.sd/2,
+                    outliers: []
+                }
+            })),
+            parameter
+        );
+
+        const yMin = yAxisConfig.yMin;
+        const yMax = yAxisConfig.yMax;
+
+        console.log(`Error bar Y-axis for ${parameter}:`, {
+            min: yMin,
+            max: yMax,
+            step: yAxisConfig.stepSize
+        });
+
+        // Scale functions
+        const getX = (index) => padding + (index + 0.5) * (chartWidth / data.length);
+        const getY = (value) => padding + (1 - (value - yMin) / (yMax - yMin)) * chartHeight;
+
+        // Draw frame (light gray box around plot area)
+        ctx.strokeStyle = '#d1d5db';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(padding, padding, chartWidth, chartHeight);
+
+        // Draw horizontal grid lines and Y-axis labels
+        ctx.fillStyle = '#374151';
+        ctx.font = `11px ${FONT_FAMILY}`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        // Create array of tick values to ensure no duplicates
+        const tickValues = [];
+        for (let i = 0; i < yAxisConfig.numTicks; i++) {
+            const value = yMin + (i * yAxisConfig.stepSize);
+            if (value <= yMax + yAxisConfig.stepSize * 0.01) {
+                tickValues.push(value);
+            }
+        }
+
+        // Draw ticks
+        tickValues.forEach(value => {
+            const y = getY(value);
+
+            // Grid line
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(padding + chartWidth, y);
+            ctx.stroke();
+
+            // Y-axis label using calculated decimal places
+            ctx.fillStyle = '#374151';
+            const labelText = value.toFixed(yAxisConfig.decimals);
+            ctx.fillText(labelText, padding - 8, y);
+        });
+
+        // Draw error bars for each station
+        data.forEach((d, index) => {
+            const x = getX(index);
+            const stats = d.stats;
+
+            // Draw error bar (vertical line for ±SD)
+            ctx.strokeStyle = '#6b7280';  // Dark grey
+            ctx.lineWidth = 1;  // Thinner line
+            ctx.beginPath();
+            ctx.moveTo(x, getY(stats.errorUpper));
+            ctx.lineTo(x, getY(stats.errorLower));
+            ctx.stroke();
+
+            // Draw horizontal caps on error bars
+            const capWidth = 8;  // Slightly smaller caps
+            ctx.beginPath();
+            // Top cap
+            ctx.moveTo(x - capWidth/2, getY(stats.errorUpper));
+            ctx.lineTo(x + capWidth/2, getY(stats.errorUpper));
+            // Bottom cap
+            ctx.moveTo(x - capWidth/2, getY(stats.errorLower));
+            ctx.lineTo(x + capWidth/2, getY(stats.errorLower));
+            ctx.stroke();
+
+            // Draw mean point (small dot, similar to outlier style)
+            ctx.fillStyle = '#1e40af';
+            ctx.beginPath();
+            ctx.arc(x, getY(stats.mean), 2, 0, 2 * Math.PI);
+            ctx.fill();
+        });
+
+        // Y-axis title (rotated)
+        ctx.save();
+        ctx.translate(20, padding + chartHeight / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#374151';
+        ctx.font = `12px ${FONT_FAMILY}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(parameter, 0, 0);
+        ctx.restore();
+
+        // X-axis labels (station names and dates on separate lines, rotated 45 degrees)
+        ctx.fillStyle = '#374151';
+        data.forEach((d, index) => {
+            const x = getX(index);
+            ctx.save();
+            ctx.translate(x, padding + chartHeight + 10);
+            ctx.rotate(-Math.PI / 4);
+            ctx.textAlign = 'right';
+
+            // Station name
+            ctx.font = `11px ${FONT_FAMILY}`;
+            ctx.fillText(d.station, 0, 0);
+
+            // Date (smaller font, below station name)
+            ctx.font = `10px ${FONT_FAMILY}`;
+            ctx.fillText(`(${d.dateLabel})`, 0, 12);
+
+            ctx.restore();
+        });
+
+        // X-axis title
+        ctx.fillStyle = '#374151';
+        ctx.font = `12px ${FONT_FAMILY}`;
+        ctx.textAlign = 'center';
+        ctx.fillText('Station', padding + chartWidth / 2, canvas.height - padding + 65);
+    }
+
+    saveWqPlot() {
+        const canvas = document.getElementById('wqPlotCanvas');
+        const link = document.createElement('a');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        link.download = `wq_plot_${this.wqPlotData.parameter}_${timestamp}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+    }
+
     populateChemVariableCheckboxes(selectedFilename) {
         console.log('populateChemVariableCheckboxes called with:', selectedFilename);
         const checkboxContainer = document.getElementById('chemVariableCheckboxes');
@@ -9369,6 +10391,12 @@ class MergePageManager {
             chemPlotPageBtn.addEventListener('click', () => this.showChemPlotPage());
         }
 
+        // WQ-Plot page navigation
+        const wqPlotPageBtn = document.getElementById('wqPlotPageBtn');
+        if (wqPlotPageBtn) {
+            wqPlotPageBtn.addEventListener('click', () => this.showWqPlotPage());
+        }
+
         // Back button navigation
         const backToMainBtn = document.getElementById('backToMainBtn');
         if (backToMainBtn) {
@@ -9456,6 +10484,36 @@ class MergePageManager {
             navigationManager.initializeChemPlotPage();
             // Update data sources in case files were already loaded
             navigationManager.updateChemPlotDataSources();
+        }
+    }
+
+    showWqPlotPage() {
+        // Hide all other pages and show wq-plot page
+        document.querySelectorAll('.page-content').forEach(page => {
+            page.classList.remove('active');
+        });
+
+        // Show wq-plot page
+        const wqPlotPage = document.getElementById('wqPlotPage');
+        if (wqPlotPage) {
+            wqPlotPage.classList.add('active');
+        }
+
+        // Set wq-plot button as active
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('wqPlotPageBtn')?.classList.add('active');
+
+        // Update navigation manager's current page
+        if (navigationManager) {
+            navigationManager.currentPage = 'wqPlot';
+        }
+
+        // Initialize the wq-plot functionality
+        if (navigationManager) {
+            navigationManager.initializeWqPlotPage();
+            navigationManager.updateWqPlotDataSources();
         }
     }
 
@@ -10104,6 +11162,8 @@ document.addEventListener('DOMContentLoaded', () => {
             navigationManager.updatePlotPageFileInfo().catch(console.error);
             // Also update chem plot data sources
             navigationManager.updateChemPlotDataSources();
+            // Also update WQ plot data sources
+            navigationManager.updateWqPlotDataSources();
         }
     };
 });
