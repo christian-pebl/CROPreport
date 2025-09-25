@@ -7491,7 +7491,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
                 generateWeightPlotBtn.disabled = true;
             } else if (isIndivFile) {
                 parameterSelect.disabled = false;
-                parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option><option value=\"fresh_weight\">Fresh Weight (FW kg/m)</option>";
+                parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option><option value=\"fresh_weight\">Yield (FW kg/m)</option>";
                 parameterHelpText.textContent = "Select a parameter to analyze";
                 parameterHelpText.style.color = "#666";
                 updateGenerateButton();
@@ -7717,7 +7717,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         chartContainer.style.marginTop = '20px';
 
         const title = document.createElement('h3');
-        title.textContent = 'Fresh Weight (kg/m) by Station';
+        title.textContent = 'Yield (kg/m) by Station';
         title.style.marginBottom = '10px';
 
         chartContainer.appendChild(title);
@@ -7743,7 +7743,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#555';
         ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('Fresh Weight (FW kg/m) by station', padding, 50);
+        ctx.fillText('Yield (FW kg/m) by station', padding, 50);
 
         if (data.length === 0) {
             ctx.fillStyle = '#666';
@@ -7753,10 +7753,23 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             return;
         }
 
-        // Calculate max value for scaling with smart Y-axis
+        // Calculate max value for scaling - exactly 10% above highest point
         const maxDataValue = Math.max(...data.map(d => d.averageWeight));
-        const yAxisData = this.calculateSmartYAxis(maxDataValue);
-        const yScale = chartHeight / yAxisData.yMax;
+        const yMax = maxDataValue * 1.1; // Exactly 10% above max
+
+        // Calculate nice step size for grid lines
+        const numGridLines = 5;
+        const rawStep = yMax / numGridLines;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const normalizedStep = rawStep / magnitude;
+
+        let stepSize;
+        if (normalizedStep <= 1) stepSize = 1 * magnitude;
+        else if (normalizedStep <= 2) stepSize = 2 * magnitude;
+        else if (normalizedStep <= 5) stepSize = 5 * magnitude;
+        else stepSize = 10 * magnitude;
+
+        const yScale = chartHeight / yMax;
         const barWidth = chartWidth / data.length * 0.7;
         const barSpacing = chartWidth / data.length * 0.3;
 
@@ -7769,13 +7782,16 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.setLineDash([2, 4]);
 
         // Horizontal gridlines with smart Y-axis values
-        for (let i = 1; i < yAxisData.numTicks; i++) {
-            const yValue = yAxisData.stepSize * i;
-            const y = canvas.height - padding - (yValue * yScale);
-            ctx.beginPath();
-            ctx.moveTo(padding, y);
-            ctx.lineTo(canvas.width - padding, y);
-            ctx.stroke();
+        const numTicks = Math.ceil(yMax / stepSize);
+        for (let i = 1; i <= numTicks; i++) {
+            const yValue = stepSize * i;
+            if (yValue <= yMax) {
+                const y = canvas.height - padding - (yValue * yScale);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - padding, y);
+                ctx.stroke();
+            }
         }
 
         // Vertical gridlines
@@ -7838,10 +7854,12 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillStyle = '#666';
         ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'right';
-        for (let i = 0; i < yAxisData.numTicks; i++) {
-            const value = yAxisData.stepSize * i;
-            const y = canvas.height - padding - (value * yScale);
-            ctx.fillText(value.toFixed(value < 10 ? 1 : 0), padding - 15, y + 4);
+        for (let i = 0; i <= numTicks; i++) {
+            const value = stepSize * i;
+            if (value <= yMax) {
+                const y = canvas.height - padding - (value * yScale);
+                ctx.fillText(value.toFixed(value < 10 ? 1 : 0), padding - 15, y + 4);
+            }
         }
 
         // Axis labels
@@ -7853,7 +7871,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.save();
         ctx.translate(35, canvas.height / 2);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText('Fresh Weight (kg/m)', 0, 0);
+        ctx.fillText('Yield (kg/m)', 0, 0);
         ctx.restore();
 
         // Add summary stats table
@@ -7877,7 +7895,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         // Header
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        ['Station', 'Average Weight (kg/m)', 'Sample Count'].forEach(text => {
+        ['Station', 'Average Yield (kg/m)', 'Sample Count'].forEach(text => {
             const th = document.createElement('th');
             th.textContent = text;
             th.style.border = '1px solid #ddd';
