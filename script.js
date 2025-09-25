@@ -3320,6 +3320,7 @@ class NavigationManager {
         // Initialize dropdowns and button event listeners
         this.initializeComparisonControls();
         this.initializeBladeCountControls();
+        this.initializeWeightPlotControls();
     }
 
     initializeComparisonControls() {
@@ -3770,6 +3771,9 @@ class NavigationManager {
 
         // Update blade count dropdowns
         this.updateBladeCountDropdowns(pageName);
+
+        // Update weight plot dropdowns
+        this.updateWeightPlotDropdowns(pageName);
 
     }
 
@@ -7452,6 +7456,430 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         data.forEach(station => {
             const row = document.createElement('tr');
             [station.station, station.smallBlades, station.largeBlades, station.total].forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = value;
+                td.style.border = '1px solid #ddd';
+                td.style.padding = '8px';
+                td.style.textAlign = 'center';
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        tableContainer.appendChild(table);
+        outputDiv.appendChild(tableContainer);
+    }
+
+    // Weight Plot Functions
+    initializeWeightPlotControls() {
+        const dataSourceSelect = document.getElementById("weightDataSourceSelect");
+        const parameterSelect = document.getElementById("weightParameterSelect");
+        const generateWeightPlotBtn = document.getElementById("generateWeightPlotBtn");
+        const parameterHelpText = document.getElementById("weightParameterHelpText");
+
+        const updateParameterDropdown = () => {
+            const selectedSource = dataSourceSelect.value;
+            const isIndivFile = selectedSource && (selectedSource.includes('Indiv') || selectedSource.includes('_indiv'));
+            const isSummaryFile = selectedSource && (selectedSource.includes('Summary') || selectedSource.includes('_summary'));
+
+            if (isSummaryFile && !isIndivFile) {
+                parameterSelect.disabled = true;
+                parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option>";
+                parameterHelpText.textContent = "Summary files don't support weight analysis. Please select an Indiv file.";
+                parameterHelpText.style.color = "#999";
+                generateWeightPlotBtn.disabled = true;
+            } else if (isIndivFile) {
+                parameterSelect.disabled = false;
+                parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option><option value=\"fresh_weight\">Fresh Weight (FW kg/m)</option>";
+                parameterHelpText.textContent = "Select a parameter to analyze";
+                parameterHelpText.style.color = "#666";
+                updateGenerateButton();
+            } else {
+                parameterSelect.disabled = true;
+                parameterSelect.innerHTML = "<option value=\"\">Select parameter...</option>";
+                parameterHelpText.textContent = "Select data source first";
+                parameterHelpText.style.color = "#666";
+                generateWeightPlotBtn.disabled = true;
+            }
+        };
+
+        const updateGenerateButton = () => {
+            const sourceSelected = dataSourceSelect.value;
+            const parameterSelected = parameterSelect.value;
+            const isIndivFile = sourceSelected && (sourceSelected.includes('Indiv') || sourceSelected.includes('_indiv'));
+            generateWeightPlotBtn.disabled = !(isIndivFile && parameterSelected === "fresh_weight");
+        };
+
+        if (dataSourceSelect) dataSourceSelect.addEventListener("change", updateParameterDropdown);
+        if (parameterSelect) parameterSelect.addEventListener("change", updateGenerateButton);
+        if (generateWeightPlotBtn) {
+            generateWeightPlotBtn.addEventListener("click", () => {
+                this.generateWeightPlotChart();
+            });
+        }
+
+        // Initial population of dropdown
+        this.updateWeightPlotDropdowns();
+    }
+
+    updateWeightPlotDropdowns(pageName = 'plot') {
+        console.log("🎛️ DEBUG: Starting weight plot dropdown update process");
+
+        // Look for Indiv files
+        const weightPlotFiles = [];
+
+        if (this.availableFiles && this.availableFiles.length > 0) {
+            // Look for Indiv files (case insensitive, various patterns)
+            const individFiles = this.availableFiles.filter(file => {
+                const fileName = file.name.toLowerCase();
+                return fileName.includes('indiv') || fileName.includes('_indiv') || fileName.includes('individual');
+            });
+            weightPlotFiles.push(...individFiles);
+        }
+
+        console.log("📁 DEBUG: Found weight plot files:", weightPlotFiles.map(f => f.name));
+
+        // Update data source dropdown
+        const dataSourceSelect = document.getElementById('weightDataSourceSelect');
+        if (dataSourceSelect) {
+            console.log("🎯 DEBUG: Found weightDataSourceSelect dropdown, populating with weight plot files");
+            dataSourceSelect.innerHTML = '<option value="">Select data source...</option>';
+            weightPlotFiles.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                dataSourceSelect.appendChild(option);
+            });
+        }
+    }
+
+    async generateWeightPlotChart() {
+        const outputDiv = document.getElementById("weightPlotOutput");
+
+        // Make sure output div is visible
+        outputDiv.classList.add('active');
+
+        try {
+            // Show loading state
+            outputDiv.innerHTML = "<p>Loading and processing data...</p>";
+
+            // Load and process data
+            const rawData = await this.loadWeightPlotData();
+            const cleanedData = this.cleanWeightPlotData(rawData);
+            const aggregationResult = this.aggregateWeightPlotData(cleanedData);
+
+            // Render chart
+            this.renderWeightPlotChart(aggregationResult.data, outputDiv, aggregationResult.stationDateMap);
+
+        } catch (error) {
+            console.error('Error generating weight plot chart:', error);
+            outputDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        }
+    }
+
+    async loadWeightPlotData() {
+        // Get the selected file from the data source dropdown
+        const dataSourceSelect = document.getElementById("weightDataSourceSelect");
+        const selectedFilename = dataSourceSelect ? dataSourceSelect.value : null;
+
+        if (!selectedFilename) {
+            throw new Error('Please select a data source from the dropdown first.');
+        }
+
+        // Find the selected file in loaded files
+        let selectedFile = null;
+
+        if (csvManager && csvManager.workingDirFiles) {
+            console.log('Available files:', csvManager.workingDirFiles.map(f => f.name));
+            selectedFile = csvManager.workingDirFiles.find(file => file.name === selectedFilename);
+        }
+
+        if (!selectedFile) {
+            throw new Error(`File "${selectedFilename}" not found. Please load it using the "Select CSV Files" button first.`);
+        }
+
+        console.log('Loading file:', selectedFile.name);
+        return this.parseCSVFile(selectedFile);
+    }
+
+    cleanWeightPlotData(data) {
+        const cleanedData = [];
+        const fwColumn = 'FW kg/m';  // Looking for Fresh Weight column
+
+        data.forEach(row => {
+            // Check if FW kg/m column exists and has a value
+            if (row[fwColumn] !== undefined && row[fwColumn] !== null && row[fwColumn] !== '') {
+                const weight = parseFloat(row[fwColumn]);
+                if (!isNaN(weight)) {
+                    cleanedData.push({
+                        sampleId: row['sample ID'] || row.sampleId || row.sample_id || 'Unknown',
+                        date: row['Date'] || row.date || '',
+                        weight: weight
+                    });
+                }
+            }
+        });
+
+        console.log('Weight plot data cleaned:', cleanedData.length, 'valid rows');
+        return cleanedData;
+    }
+
+    aggregateWeightPlotData(data) {
+        const grouped = {};
+        const stationSet = new Set();
+
+        // Group by station + date and calculate average weight
+        data.forEach(row => {
+            const sampleId = row.sampleId;
+            const date = row.date;
+            const weight = row.weight;
+
+            if (!sampleId || !date) return;
+
+            // Create unique station+date identifier
+            const stationDateId = `${sampleId} (${date})`;
+            stationSet.add(stationDateId);
+
+            if (!grouped[stationDateId]) {
+                grouped[stationDateId] = {
+                    weights: [],
+                    sum: 0,
+                    count: 0
+                };
+            }
+
+            grouped[stationDateId].weights.push(weight);
+            grouped[stationDateId].sum += weight;
+            grouped[stationDateId].count++;
+        });
+
+        // Convert to structured format with time-based sorting
+        const stationDateMap = this.buildStationDateMap(data.map(d => ({
+            'sample ID': d.sampleId,
+            'Date': d.date
+        })));
+        const stations = this.sortStationsByTime(Array.from(stationSet), stationDateMap);
+
+        console.log('🕒 Station sorting by time:', stations.map(s => ({
+            station: s,
+            date: stationDateMap[s] ? stationDateMap[s].toISOString().split('T')[0] : 'no date'
+        })));
+
+        const result = stations.map(stationDateId => {
+            const stationData = grouped[stationDateId];
+            if (!stationData) return null;
+
+            return {
+                station: stationDateId,
+                averageWeight: stationData.sum / stationData.count,
+                totalWeight: stationData.sum,
+                count: stationData.count
+            };
+        }).filter(item => item !== null);
+
+        console.log('Aggregated weight data:', result);
+        return { data: result, stationDateMap: stationDateMap };
+    }
+
+    renderWeightPlotChart(data, outputDiv, stationDateMap = {}) {
+        // Create canvas for chart with dynamic width based on number of stations
+        const canvas = document.createElement('canvas');
+        const stationCount = data.length;
+        const minCanvasWidth = 576;
+        const optimalWidthPerStation = 50; // Optimal width per station for clear display
+        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+        canvas.width = dynamicWidth;
+        canvas.height = 360;
+        canvas.style.border = '1px solid #ddd';
+        canvas.style.borderRadius = '4px';
+        canvas.style.backgroundColor = '#ffffff';
+        canvas.style.display = 'block';
+        canvas.style.margin = '10px auto';
+
+        // Create chart container
+        outputDiv.innerHTML = '';
+        const chartContainer = document.createElement('div');
+        chartContainer.style.textAlign = 'center';
+        chartContainer.style.marginTop = '20px';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Fresh Weight (kg/m) by Station';
+        title.style.marginBottom = '10px';
+
+        chartContainer.appendChild(title);
+        chartContainer.appendChild(canvas);
+        outputDiv.appendChild(chartContainer);
+
+        // Draw the chart
+        this.drawWeightColumnChart(canvas, data, stationDateMap);
+    }
+
+    drawWeightColumnChart(canvas, data, stationDateMap = {}) {
+        const ctx = canvas.getContext('2d');
+        const padding = 80;
+        const chartWidth = canvas.width - 2 * padding;
+        const chartHeight = canvas.height - 2 * padding;
+
+        // Clear canvas with white background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add chart title - left aligned above plot area
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Fresh Weight (FW kg/m) by station', padding, 50);
+
+        if (data.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        // Calculate max value for scaling with smart Y-axis
+        const maxDataValue = Math.max(...data.map(d => d.averageWeight));
+        const yAxisData = this.calculateSmartYAxis(maxDataValue);
+        const yScale = chartHeight / yAxisData.yMax;
+        const barWidth = chartWidth / data.length * 0.7;
+        const barSpacing = chartWidth / data.length * 0.3;
+
+        // Bar color - using the same blue as blade count small blades
+        const barColor = '#1f77b4';
+
+        // Draw gridlines first (behind bars) - horizontal and vertical
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 4]);
+
+        // Horizontal gridlines with smart Y-axis values
+        for (let i = 1; i < yAxisData.numTicks; i++) {
+            const yValue = yAxisData.stepSize * i;
+            const y = canvas.height - padding - (yValue * yScale);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(canvas.width - padding, y);
+            ctx.stroke();
+        }
+
+        // Vertical gridlines
+        data.forEach((station, index) => {
+            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2 + barWidth / 2;
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, canvas.height - padding);
+            ctx.stroke();
+        });
+
+        ctx.setLineDash([]);
+
+        // Draw bars
+        data.forEach((station, index) => {
+            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+            const barHeight = station.averageWeight * yScale;
+
+            // Draw the bar
+            ctx.fillStyle = barColor;
+            ctx.fillRect(x, canvas.height - padding - barHeight, barWidth, barHeight);
+
+            // Add value label on top of bar
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(station.averageWeight.toFixed(2), x + barWidth / 2, canvas.height - padding - barHeight - 5);
+
+            // Station label
+            ctx.fillStyle = '#666';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.save();
+            ctx.translate(x + barWidth / 2, canvas.height - padding + 25);
+            ctx.rotate(-Math.PI / 4);
+            const labelData = this.formatStationLabelWithDate(station.station, stationDateMap);
+            ctx.fillText(labelData.line1, 0, 0);
+            if (labelData.line2) {
+                ctx.fillText(labelData.line2, 0, 12); // Second line 12px below
+            }
+            ctx.restore();
+        });
+
+        // Draw axes - complete rectangle around plot area
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        // Left axis
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, canvas.height - padding);
+        // Bottom axis
+        ctx.lineTo(canvas.width - padding, canvas.height - padding);
+        // Right axis
+        ctx.lineTo(canvas.width - padding, padding);
+        // Top axis
+        ctx.lineTo(padding, padding);
+        ctx.stroke();
+
+        // Y-axis labels with smart values
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        for (let i = 0; i < yAxisData.numTicks; i++) {
+            const value = yAxisData.stepSize * i;
+            const y = canvas.height - padding - (value * yScale);
+            ctx.fillText(value.toFixed(value < 10 ? 1 : 0), padding - 15, y + 4);
+        }
+
+        // Axis labels
+        ctx.fillStyle = '#555';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Station', canvas.width / 2, canvas.height - padding + 60);
+
+        ctx.save();
+        ctx.translate(35, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Fresh Weight (kg/m)', 0, 0);
+        ctx.restore();
+
+        // Add summary stats table
+        this.addWeightSummaryTable(data, outputDiv);
+    }
+
+    addWeightSummaryTable(data, outputDiv) {
+        const tableContainer = document.createElement('div');
+        tableContainer.style.marginTop = '20px';
+
+        const tableTitle = document.createElement('h4');
+        tableTitle.textContent = 'Summary Data';
+        tableContainer.appendChild(tableTitle);
+
+        const table = document.createElement('table');
+        table.style.border = '1px solid #ddd';
+        table.style.borderCollapse = 'collapse';
+        table.style.margin = '0 auto';
+        table.style.minWidth = '400px';
+
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Station', 'Average Weight (kg/m)', 'Sample Count'].forEach(text => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            th.style.border = '1px solid #ddd';
+            th.style.padding = '8px';
+            th.style.backgroundColor = '#f5f5f5';
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        data.forEach(station => {
+            const row = document.createElement('tr');
+            [station.station, station.averageWeight.toFixed(2), station.count].forEach(value => {
                 const td = document.createElement('td');
                 td.textContent = value;
                 td.style.border = '1px solid #ddd';
