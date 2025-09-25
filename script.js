@@ -21,6 +21,14 @@ class CSVManager {
             });
         }
 
+        // Merge Indiv files by date functionality
+        const mergeIndivBtn = document.getElementById('mergeIndivBtn');
+        if (mergeIndivBtn) {
+            mergeIndivBtn.addEventListener('click', () => {
+                this.mergeIndivFilesByDate();
+            });
+        }
+
         // File info toggle functionality
         const fileInfoToggle = document.getElementById('fileInfoToggle');
         if (fileInfoToggle) {
@@ -1663,7 +1671,7 @@ class CSVManager {
         if (this.csvData.length === 0) return;
 
         let csvContent = this.headers.map(header => this.escapeCSVField(header)).join(',') + '\n';
-        
+
         this.csvData.forEach(row => {
             const escapedRow = row.map(field => this.escapeCSVField(field)).join(',');
             csvContent += escapedRow + '\n';
@@ -1671,7 +1679,7 @@ class CSVManager {
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        
+
         if (link.download !== undefined) {
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
@@ -1681,6 +1689,120 @@ class CSVManager {
             link.click();
             document.body.removeChild(link);
         }
+    }
+
+    mergeIndivFilesByDate() {
+        console.log('Starting merge of _indiv files by date...');
+
+        // Check if current file is an _indiv file
+        if (!this.fileName || !this.fileName.toLowerCase().includes('indiv')) {
+            alert('Please load an _indiv file first to use the merge function.');
+            return;
+        }
+
+        if (this.csvData.length === 0) {
+            alert('No data available to merge.');
+            return;
+        }
+
+        console.log('Merging data from file:', this.fileName);
+        console.log('Original data rows:', this.csvData.length);
+        console.log('Headers:', this.headers);
+
+        // Find column indices
+        const sampleIdIndex = this.headers.findIndex(h =>
+            h && (h.toLowerCase().includes('sample id') || h.toLowerCase() === 'sample_id' || h.toLowerCase() === 'sampleid')
+        );
+        const dateIndex = this.headers.findIndex(h =>
+            h && h.toLowerCase() === 'date'
+        );
+        const bladeIdIndex = this.headers.findIndex(h =>
+            h && (h.toLowerCase().includes('blade id') || h.toLowerCase() === 'blade_id' || h.toLowerCase() === 'bladeid')
+        );
+
+        if (sampleIdIndex === -1 || dateIndex === -1) {
+            alert('Could not find required columns (Sample ID and Date) in the file.');
+            console.error('Column indices - Sample ID:', sampleIdIndex, 'Date:', dateIndex, 'Blade ID:', bladeIdIndex);
+            return;
+        }
+
+        // Group data by date
+        const groupedByDate = {};
+
+        this.csvData.forEach(row => {
+            const date = row[dateIndex];
+            const originalSampleId = row[sampleIdIndex];
+            const bladeId = bladeIdIndex !== -1 ? row[bladeIdIndex] : '';
+
+            if (!date) return;
+
+            if (!groupedByDate[date]) {
+                groupedByDate[date] = [];
+            }
+
+            // Create a copy of the row
+            const newRow = [...row];
+
+            // Update sample ID to Farm-L
+            newRow[sampleIdIndex] = 'Farm-L';
+
+            // Update blade ID with suffix if it exists
+            if (bladeIdIndex !== -1 && bladeId) {
+                // Append the original sample ID as suffix to blade ID
+                newRow[bladeIdIndex] = `${bladeId}_${originalSampleId}`;
+            }
+
+            // Store the row with the original sample ID for reference
+            groupedByDate[date].push({
+                row: newRow,
+                originalSampleId: originalSampleId
+            });
+        });
+
+        // Flatten the grouped data back into rows
+        const mergedData = [];
+        const dates = Object.keys(groupedByDate).sort();
+
+        console.log('Unique dates found:', dates.length);
+        console.log('Dates:', dates);
+
+        dates.forEach(date => {
+            const dateRows = groupedByDate[date];
+            console.log(`Date ${date}: ${dateRows.length} rows`);
+
+            // Add all rows for this date to the merged data
+            dateRows.forEach(item => {
+                mergedData.push(item.row);
+            });
+        });
+
+        console.log('Merged data rows:', mergedData.length);
+
+        // Update the current data with merged data
+        this.csvData = mergedData;
+
+        // Update the filename
+        const originalFileName = this.fileName.replace('.csv', '');
+        this.fileName = `${originalFileName}_merged_Farm-L.csv`;
+
+        // Update the display
+        const dataTitle = document.getElementById('dataTitle');
+        if (dataTitle) {
+            dataTitle.textContent = this.fileName;
+        }
+
+        const recordCount = document.getElementById('recordCount');
+        if (recordCount) {
+            recordCount.textContent = `${this.csvData.length} records (merged by date)`;
+        }
+
+        // Refresh the table display
+        this.renderTable();
+
+        // Show success message
+        alert(`Successfully merged ${this.csvData.length} records into Farm-L station grouped by ${dates.length} unique dates.\n\nBlade IDs have been suffixed with their original station IDs.\n\nClick "Export Current" to save the merged file.`);
+
+        console.log('Merge complete!');
     }
 
     escapeCSVField(field) {
@@ -6057,12 +6179,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             toggleContainer.appendChild(tableBtn);
             chartContainer.appendChild(toggleContainer);
 
-            // Create canvas for chart with dynamic width based on number of stations
+            // Create canvas for chart with adaptive width based on number of stations
             const canvas = document.createElement('canvas');
             const stationCount = aggregatedData.length;
-            const minCanvasWidth = 576;
-            const optimalWidthPerStation = 50; // Optimal width per station for clear display
-            const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+            const dynamicWidth = this.calculateAdaptiveCanvasWidth(stationCount);
             canvas.width = dynamicWidth;
             canvas.height = 360;
             canvas.id = 'widthDistributionChart';
@@ -7230,14 +7350,28 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         return { data: result, stationDateMap: stationDateMap };
     }
 
+    calculateAdaptiveCanvasWidth(dataCount) {
+        // Fixed dimensions for consistent appearance
+        const barWidth = 40; // Fixed bar width
+        const barSpacing = 20; // Fixed spacing between bars
+        const padding = 160; // Total padding (80px each side)
+
+        // Calculate required width (no spacing after last bar)
+        const requiredWidth = barWidth * dataCount + barSpacing * (dataCount - 1) + padding;
+
+        // Set minimum to ensure readability but not too wide for few points
+        const minWidth = 400; // Reduced minimum for better appearance with few points
+        const maxWidth = 1200; // Maximum width to prevent overly wide charts
+
+        return Math.min(Math.max(requiredWidth, minWidth), maxWidth);
+    }
+
     renderBladeCountChart(data, outputDiv, stationDateMap = {}) {
 
-        // Create canvas for chart with dynamic width based on number of stations
+        // Create canvas for chart with adaptive width based on number of stations
         const canvas = document.createElement('canvas');
         const stationCount = data.length;
-        const minCanvasWidth = 576;
-        const optimalWidthPerStation = 50; // Optimal width per station for clear display
-        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+        const dynamicWidth = this.calculateAdaptiveCanvasWidth(stationCount);
         canvas.width = dynamicWidth;
         canvas.height = 360;
         canvas.style.border = '1px solid #ddd';
@@ -7294,8 +7428,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const maxDataValue = Math.max(...data.map(d => d.total));
         const maxValue = maxDataValue * 1.1;  // Add 10% buffer
         const yScale = chartHeight / maxValue;
-        const barWidth = chartWidth / data.length * 0.7;
-        const barSpacing = chartWidth / data.length * 0.3;
+
+        // Use fixed bar width and spacing for consistency
+        const barWidth = 40;
+        const barSpacing = 20;
+        // Calculate total width needed (no spacing after last bar)
+        const totalBarArea = barWidth * data.length + barSpacing * (data.length - 1);
+        const startX = padding + (chartWidth - totalBarArea) / 2; // Center the bars
 
         // Modern color scheme matching reference image
         const smallColor = '#1f77b4';  // Blue similar to reference
@@ -7317,7 +7456,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Vertical gridlines
         data.forEach((station, index) => {
-            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2 + barWidth / 2;
+            const x = startX + index * (barWidth + barSpacing) + barWidth / 2;
             ctx.beginPath();
             ctx.moveTo(x, padding);
             ctx.lineTo(x, canvas.height - padding);
@@ -7328,7 +7467,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Draw bars
         data.forEach((station, index) => {
-            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+            const x = startX + index * (barWidth + barSpacing);
             const smallHeight = station.smallBlades * yScale;
             const largeHeight = station.largeBlades * yScale;
 
@@ -7683,11 +7822,23 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             const stationData = grouped[stationDateId];
             if (!stationData) return null;
 
+            const mean = stationData.sum / stationData.count;
+
+            // Calculate standard deviation
+            let standardDeviation = 0;
+            if (stationData.count > 1) {
+                const squaredDiffs = stationData.weights.map(weight => Math.pow(weight - mean, 2));
+                const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / stationData.count;
+                standardDeviation = Math.sqrt(variance);
+            }
+
             return {
                 station: stationDateId,
-                averageWeight: stationData.sum / stationData.count,
+                averageWeight: mean,
+                standardDeviation: standardDeviation,
                 totalWeight: stationData.sum,
-                count: stationData.count
+                count: stationData.count,
+                rawWeights: stationData.weights // Keep for debugging if needed
             };
         }).filter(item => item !== null);
 
@@ -7696,12 +7847,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
     }
 
     renderWeightPlotChart(data, outputDiv, stationDateMap = {}) {
-        // Create canvas for chart with dynamic width based on number of stations
+        // Create canvas for chart with adaptive width based on number of stations
         const canvas = document.createElement('canvas');
         const stationCount = data.length;
-        const minCanvasWidth = 576;
-        const optimalWidthPerStation = 50; // Optimal width per station for clear display
-        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+        const dynamicWidth = this.calculateAdaptiveCanvasWidth(stationCount);
         canvas.width = dynamicWidth;
         canvas.height = 360;
         canvas.style.border = '1px solid #ddd';
@@ -7726,6 +7875,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Draw the chart
         this.drawWeightColumnChart(canvas, data, stationDateMap, outputDiv);
+
+        // Add event listener for error bars toggle
+        const errorBarsToggle = document.getElementById('showErrorBarsToggle');
+        if (errorBarsToggle) {
+            errorBarsToggle.addEventListener('change', () => {
+                this.drawWeightColumnChart(canvas, data, stationDateMap, outputDiv);
+            });
+        }
     }
 
     drawWeightColumnChart(canvas, data, stationDateMap = {}, outputDiv) {
@@ -7770,8 +7927,13 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         else stepSize = 10 * magnitude;
 
         const yScale = chartHeight / yMax;
-        const barWidth = chartWidth / data.length * 0.7;
-        const barSpacing = chartWidth / data.length * 0.3;
+
+        // Use fixed bar width and spacing for consistency
+        const barWidth = 40;
+        const barSpacing = 20;
+        // Calculate total width needed (no spacing after last bar)
+        const totalBarArea = barWidth * data.length + barSpacing * (data.length - 1);
+        const startX = padding + (chartWidth - totalBarArea) / 2; // Center the bars
 
         // Bar color - using the same blue as blade count small blades
         const barColor = '#1f77b4';
@@ -7796,7 +7958,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Vertical gridlines
         data.forEach((station, index) => {
-            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2 + barWidth / 2;
+            const x = startX + index * (barWidth + barSpacing) + barWidth / 2;
             ctx.beginPath();
             ctx.moveTo(x, padding);
             ctx.lineTo(x, canvas.height - padding);
@@ -7807,20 +7969,14 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         // Draw bars
         data.forEach((station, index) => {
-            const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
+            const x = startX + index * (barWidth + barSpacing);
             const barHeight = station.averageWeight * yScale;
 
             // Draw the bar
             ctx.fillStyle = barColor;
             ctx.fillRect(x, canvas.height - padding - barHeight, barWidth, barHeight);
 
-            // Add value label on top of bar
-            ctx.fillStyle = '#666';
-            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(station.averageWeight.toFixed(2), x + barWidth / 2, canvas.height - padding - barHeight - 5);
-
-            // Station label
+            // Station label (draw before error bars)
             ctx.fillStyle = '#666';
             ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'center';
@@ -7874,8 +8030,80 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         ctx.fillText('Yield (kg/m)', 0, 0);
         ctx.restore();
 
+        // Draw error bars if enabled
+        const errorBarsToggle = document.getElementById('showErrorBarsToggle');
+        const showErrorBars = errorBarsToggle && errorBarsToggle.checked;
+        if (showErrorBars) {
+            this.drawYieldErrorBars(ctx, canvas, data, startX, barWidth, barSpacing, yScale, padding);
+        }
+
+        // Draw value labels last (on top layer)
+        this.drawYieldValueLabels(ctx, canvas, data, startX, barWidth, barSpacing, yScale, padding, showErrorBars);
+
         // Add summary stats table
         this.addWeightSummaryTable(data, outputDiv);
+    }
+
+    drawYieldErrorBars(ctx, canvas, data, startX, barWidth, barSpacing, yScale, padding) {
+        // Error bar styling - thinner and dark grey
+        ctx.strokeStyle = '#555'; // Dark grey
+        ctx.lineWidth = 1.5; // Thinner
+        ctx.lineCap = 'round';
+
+        data.forEach((station, index) => {
+            // Skip if no standard deviation or single measurement
+            if (station.standardDeviation === 0 || station.count <= 1) return;
+
+            const x = startX + index * (barWidth + barSpacing) + barWidth / 2; // Center of bar
+            const meanY = canvas.height - padding - (station.averageWeight * yScale);
+            const sdPixels = station.standardDeviation * yScale;
+
+            // Calculate error bar positions (±1 SD)
+            const topY = meanY - sdPixels;
+            const bottomY = meanY + sdPixels;
+
+            // Draw vertical line (main error bar)
+            ctx.beginPath();
+            ctx.moveTo(x, topY);
+            ctx.lineTo(x, bottomY);
+            ctx.stroke();
+
+            // Draw top cap
+            const capWidth = barWidth * 0.3; // 30% of bar width
+            ctx.beginPath();
+            ctx.moveTo(x - capWidth / 2, topY);
+            ctx.lineTo(x + capWidth / 2, topY);
+            ctx.stroke();
+
+            // Draw bottom cap
+            ctx.beginPath();
+            ctx.moveTo(x - capWidth / 2, bottomY);
+            ctx.lineTo(x + capWidth / 2, bottomY);
+            ctx.stroke();
+        });
+    }
+
+    drawYieldValueLabels(ctx, canvas, data, startX, barWidth, barSpacing, yScale, padding, showErrorBars) {
+        data.forEach((station, index) => {
+            const x = startX + index * (barWidth + barSpacing);
+            const barHeight = station.averageWeight * yScale;
+
+            if (showErrorBars) {
+                // Position labels inside the bar when error bars are shown
+                const labelY = canvas.height - padding - barHeight / 2; // Middle of bar
+                ctx.fillStyle = 'white'; // White text for contrast
+                ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.averageWeight.toFixed(2), x + barWidth / 2, labelY + 3); // +3 for vertical centering
+            } else {
+                // Position labels above the bar when no error bars
+                const labelY = canvas.height - padding - barHeight - 5;
+                ctx.fillStyle = '#666'; // Standard dark text
+                ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.averageWeight.toFixed(2), x + barWidth / 2, labelY);
+            }
+        });
     }
 
     addWeightSummaryTable(data, outputDiv) {
@@ -7895,7 +8123,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         // Header
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        ['Station', 'Average Yield (kg/m)', 'Sample Count'].forEach(text => {
+        ['Station', 'Average Yield (kg/m)', 'Std Dev (±)', 'Sample Count'].forEach(text => {
             const th = document.createElement('th');
             th.textContent = text;
             th.style.border = '1px solid #ddd';
@@ -7910,7 +8138,7 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const tbody = document.createElement('tbody');
         data.forEach(station => {
             const row = document.createElement('tr');
-            [station.station, station.averageWeight.toFixed(2), station.count].forEach(value => {
+            [station.station, station.averageWeight.toFixed(2), station.standardDeviation.toFixed(2), station.count].forEach(value => {
                 const td = document.createElement('td');
                 td.textContent = value;
                 td.style.border = '1px solid #ddd';
@@ -8460,12 +8688,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
             chartContainer.style.marginTop = '20px';
 
 
-            // Create canvas with dynamic width based on number of stations
+            // Create canvas with adaptive width based on number of stations
             const canvas = document.createElement('canvas');
             const stationCount = aggregatedData.length;
-            const minCanvasWidth = 576;
-            const optimalWidthPerStation = 50; // Optimal width per station for clear display
-            const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160); // +160 for padding
+            const dynamicWidth = this.calculateAdaptiveCanvasWidth(stationCount);
             canvas.width = dynamicWidth;
             canvas.height = 360;
             canvas.style.display = 'block';
@@ -9826,11 +10052,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         const { parameter, data } = this.wqPlotData;
 
-        // Dynamic canvas sizing (matching Crop-Plot)
+        // Adaptive canvas sizing (matching Crop-Plot)
         const stationCount = data.length;
-        const minCanvasWidth = 576;
-        const optimalWidthPerStation = 50;
-        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160);
+        const dynamicWidth = this.calculateAdaptiveCanvasWidth(stationCount);
         canvas.width = dynamicWidth;
         canvas.height = 360;
 
@@ -10015,11 +10239,9 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
 
         const { parameter, data } = this.wqPlotData;
 
-        // Dynamic canvas sizing (matching Crop-Plot and Whisker Plot)
+        // Adaptive canvas sizing (matching Crop-Plot and Whisker Plot)
         const stationCount = data.length;
-        const minCanvasWidth = 576;
-        const optimalWidthPerStation = 50;
-        const dynamicWidth = Math.max(minCanvasWidth, stationCount * optimalWidthPerStation + 160);
+        const dynamicWidth = this.calculateAdaptiveCanvasWidth(stationCount);
         canvas.width = dynamicWidth;
         canvas.height = 360;
 

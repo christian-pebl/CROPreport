@@ -140,6 +140,7 @@
                             <button id="editTableBtn" class="btn-secondary">✏️ Edit</button>
                             <button id="confirmSaveBtn" class="btn-primary hidden">✅ Confirm & Save</button>
                             <button id="exportBtn" class="btn-secondary">Export Current</button>
+                            <button id="mergeIndivBtn" class="btn-secondary">🔀 Merge by Date</button>
                         </div>
                         <!-- Edit mode controls - shown only when editing -->
                         <div class="edit-mode-controls hidden" id="editModeControls">
@@ -238,6 +239,10 @@
                                     <button id="generateWeightPlotBtn" class="btn-primary" disabled>
                                         Generate Yield Plot
                                     </button>
+                                    <label style="margin-left: 15px; display: flex; align-items: center; font-size: 0.9rem;">
+                                        <input type="checkbox" id="showErrorBarsToggle" style="margin-right: 5px;">
+                                        Show Error Bars (±1 SD)
+                                    </label>
                                 </div>
                                 <div id="weightPlotOutput" class="output-area"></div>
                             </div>
