@@ -7607,21 +7607,34 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         const cleanedData = [];
         const fwColumn = 'FW kg/m';  // Looking for Fresh Weight column
 
-        data.forEach(row => {
+        // Log all column headers from the first row for debugging
+        if (data.length > 0) {
+            console.log('Available columns in data:', Object.keys(data[0]));
+            console.log('Looking for column:', fwColumn);
+            console.log('Sample first row:', data[0]);
+        }
+
+        data.forEach((row, index) => {
             // Check if FW kg/m column exists and has a value
             if (row[fwColumn] !== undefined && row[fwColumn] !== null && row[fwColumn] !== '') {
                 const weight = parseFloat(row[fwColumn]);
                 if (!isNaN(weight)) {
-                    cleanedData.push({
+                    const cleanRow = {
                         sampleId: row['sample ID'] || row.sampleId || row.sample_id || 'Unknown',
                         date: row['Date'] || row.date || '',
                         weight: weight
-                    });
+                    };
+                    cleanedData.push(cleanRow);
+                    if (index < 3) {
+                        console.log(`Row ${index} cleaned:`, cleanRow);
+                    }
                 }
+            } else if (index < 5) {
+                console.log(`Row ${index} skipped - FW kg/m value:`, row[fwColumn]);
             }
         });
 
-        console.log('Weight plot data cleaned:', cleanedData.length, 'valid rows');
+        console.log('Weight plot data cleaned:', cleanedData.length, 'valid rows out of', data.length, 'total rows');
         return cleanedData;
     }
 
@@ -7712,10 +7725,10 @@ formatTimePointsAsDateLabels(sortedHours, sampleSiteData, formatType = "date") {
         outputDiv.appendChild(chartContainer);
 
         // Draw the chart
-        this.drawWeightColumnChart(canvas, data, stationDateMap);
+        this.drawWeightColumnChart(canvas, data, stationDateMap, outputDiv);
     }
 
-    drawWeightColumnChart(canvas, data, stationDateMap = {}) {
+    drawWeightColumnChart(canvas, data, stationDateMap = {}, outputDiv) {
         const ctx = canvas.getContext('2d');
         const padding = 80;
         const chartWidth = canvas.width - 2 * padding;
